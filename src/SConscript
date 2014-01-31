@@ -1,0 +1,14 @@
+import sys
+sys.path.append('../')
+from conf import *
+
+Import('env')
+locenv = env.Clone(F90PATH=['../src/', '.'])
+
+
+# locenv.Program(['../src/' + mod for mod in MODULES] +
+#                ['hstructtab_test.f90',
+#                 'fruit.f90',
+#                 'fruit_util.f90',
+#                 'fruit_driver.f90']
+#                )
