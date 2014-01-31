@@ -9,6 +9,7 @@ locenv = env.Clone(F90PATH=['../src/', '.'])
 locenv.Program('test',
                ['../src/' + mod for mod in MODULES] +
                ['hstructtab_test.f90',
+                'hstruct_test.f90',
                 'fruit.f90',
                 'fruit_util.f90',
                 'fruit_driver.f90']

@@ -112,7 +112,7 @@ function get(self, k) result(ind)
       end if
       current => current%next
    end do
-   ind = 0
+   ind = INVALID_INDEX
 end function get
 
 end module hstructtab

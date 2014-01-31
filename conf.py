@@ -13,4 +13,7 @@ FORTRANMODDIR = BUILDDIR + 'mods'
 
 MODULES = ['hstructent.f90',
            'hstructlist.f90',
-           'hstructtab.f90']
+           'hstructtab.f90',
+           'hstruct.f90',
+
+           ]
