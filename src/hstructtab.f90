@@ -32,8 +32,8 @@ contains
 subroutine init(self, buckets, modes)
    implicit none
    class(HStructureTable) :: self
-   integer, intent(in)   :: buckets
-   integer, intent(in)   :: modes
+   integer, intent(in)    :: buckets
+   integer, intent(in)    :: modes
 
    integer :: i
 
@@ -73,11 +73,11 @@ end subroutine free
 
 ! Convert the vector-indices vind to valid hash
 !  :vind:
-function hash(self, k)
+pure function hash(self, k)
    implicit none
-   class(HStructureTable) :: self
-   integer, intent(in)    :: k(self%modes_)
-   integer                :: hash
+   class(HStructureTable), intent(in) :: self
+   integer, intent(in)                :: k(self%modes_)
+   integer                            :: hash
 
    integer :: i
 
@@ -109,9 +109,9 @@ end subroutine add
 ! Lookup vector-index k; returns INVALID_INDEX if it was not found
 function get(self, k) result(ind)
    implicit none
-   class(HStructureTable) :: self
-   integer, intent(in)    :: k(self%modes_)
-   integer                :: ind
+   class(HStructureTable), intent(in) :: self
+   integer, intent(in)                :: k(self%modes_)
+   integer                            :: ind
 
    type(HStructureList), pointer :: current
    integer hashval

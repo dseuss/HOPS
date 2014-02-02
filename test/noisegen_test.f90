@@ -52,6 +52,8 @@ subroutine test_noise_generator()
    call assert_true(all(abs(EZ) <= tol), "EZ")
    call assert_true(all(abs(EZZ) <= tol), "EZZ")
    call assert_true(all(diff <= tol), "EZccZ")
+
+   call gen%free()
 end subroutine test_noise_generator
 
 end module noisegen_test

@@ -139,48 +139,48 @@ end subroutine free
 
 function find_index(self, k) result(i)
    implicit none
-   class(HStructure)   :: self
-   integer             :: i
-   integer, intent(in) :: k(self%modes_)
+   class(HStructure), intent(in) :: self
+   integer                       :: i
+   integer, intent(in)           :: k(self%modes_)
    i = self%intind_%get(k)
 end function find_index
 
 
-function indab(self, n, mode)
+elemental function indab(self, n, mode)
    implicit none
-   class(HStructure)   :: self
-   integer, intent(in) :: n
-   integer, intent(in) :: mode
-   integer             :: indab
+   class(HStructure), intent(in) :: self
+   integer, intent(in)           :: n
+   integer, intent(in)           :: mode
+   integer                       :: indab
    ! FIXME Add some checks
    indab = self%indab_(n, mode)
 end function indab
 
 
-function indbl(self, n, mode)
+elemental function indbl(self, n, mode)
    implicit none
-   class(HStructure)   :: self
-   integer, intent(in) :: n
-   integer, intent(in) :: mode
-   integer             :: indbl
+   class(HStructure), intent(in) :: self
+   integer, intent(in)           :: n
+   integer, intent(in)           :: mode
+   integer                       :: indbl
    ! FIXME Add some checks
    indbl = self%indbl_(n, mode)
 end function indbl
 
-function vecind(self, n)
+pure function vecind(self, n)
    implicit none
-   class(HStructure)   :: self
-   integer, intent(in) :: n
-   integer             :: vecind(self%modes_)
+   class(HStructure), intent(in) :: self
+   integer, intent(in)           :: n
+   integer                       :: vecind(self%modes_)
    ! FIXME Add some checks
    vecind = self%vecind_(n, :)
 end function vecind
 
 
-function entries(self)
+elemental function entries(self)
    implicit none
-   class(HStructure) :: self
-   integer           :: entries
+   class(HStructure), intent(in) :: self
+   integer                       :: entries
    entries = self%entries_
 end function entries
 

@@ -18,19 +18,29 @@ def sortObjectFiles(scfile):
       env.AddPostAction(objs, moveModFiles)
    return objs
 
+MKLROOT = os.environ['MKLROOT']
+MKLFLAGS = '-m32 -I{MKLROOT}/include'.format(**{ 'MKLROOT': MKLROOT }).split()
+MKLLD = {'gfortran':  ' -Wl,--start-group {MKLROOT}/lib/ia32/libmkl_gf.a {MKLROOT}/lib/ia32/libmkl_core.a {MKLROOT}/lib/ia32/libmkl_sequential.a -Wl,--end-group -lpthread -lm'.format(**{ 'MKLROOT': MKLROOT }).split(),
+'ifort':  ' -Wl,--start-group {MKLROOT}/lib/ia32/libmkl_intel.a {MKLROOT}/lib/ia32/libmkl_core.a {MKLROOT}/lib/ia32/libmkl_sequential.a -Wl,--end-group -lpthread -lm'.format(**{ 'MKLROOT': MKLROOT }).split()}
+
 mode = ARGUMENTS.get('mode', 'release')
 if not (mode in ['debug', 'release']):
    print('ERROR: expected "debug" or "release", found ' + mode)
    Exit(1)
 
-FCC = 'ifort'
+FCC = ARGUMENTS.get('FCC', 'gfortran')
+if not (FCC in ['ifort', 'gfortran']):
+   print('ERROR: expected "ifort" or "gfortran", found ' + FCC)
+   Exit(1)
+
 FLAGS = {'release': '-O3'.split(),
          'debug': '-g -O0'.split()
          }
 
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],
-                  F90FLAGS=FLAGS[mode],
+                  F90FLAGS=FLAGS[mode] + MKLFLAGS,
+                  _LIBFLAGS=MKLLD[FCC],
                   F90PATH='#/src /usr/include'.split(),
                   )
 
@@ -42,4 +52,5 @@ objs = sortObjectFiles(r'#src/SConscript')
 testobjs = sortObjectFiles(r'#test/SConscript')
 
 env.Program('runtest', objs + testobjs,
-            LIBS='fftw3', LIBPATH=['/usr/lib/i386-linux-gnu/'])
+            LIBS=['fftw3'],
+            LIBPATH=['/usr/lib/i386-linux-gnu/'])

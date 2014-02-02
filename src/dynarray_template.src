@@ -1,0 +1,78 @@
+private
+
+type, public :: TYPENAME
+   private
+   integer :: size_
+   integer :: pos_
+   integer :: chunk_
+   DTYPE, allocatable, public :: data(:)
+
+   contains
+   private
+
+   procedure, public :: init
+   procedure, public :: free
+   procedure, public :: add
+   procedure, public :: get
+   procedure, public :: size
+end type TYPENAME
+
+contains
+
+subroutine init(self, chunk)
+   implicit none
+   class(TYPENAME) :: self
+   integer, intent(in) :: chunk
+   self%size_ = 0
+   self%pos_ = 0
+   self%chunk_ = chunk
+end subroutine init
+
+
+subroutine free(self)
+   implicit none
+   class(TYPENAME) :: self
+   if (allocated(self%data)) then
+      deallocate(self%data)
+   end if
+end subroutine free
+
+
+subroutine add(self, x)
+   implicit none
+   class(TYPENAME)   :: self
+   DTYPE, intent(in) :: x
+   DTYPE, allocatable :: tmp(:)
+
+   if (self%size_ <= self%pos_) then
+      allocate(tmp(self%size_ + self%chunk_))
+      tmp(1:self%size_) = self%data
+      call move_alloc(from=tmp, to=self%data)
+      self%size_ = self%size_ + self%chunk_
+   end if
+
+   self%pos_ = self%pos_ + 1
+   self%data(self%pos_) = x
+end subroutine add
+
+
+function get(self, N) result(x)
+   implicit none
+   class(TYPENAME), intent(in) :: self
+   integer, intent(in)         :: N
+   DTYPE                       :: x
+
+   if ((N < 1) .or. (N > self%pos_)) then
+      print *, "ERROR: Dynamic array out of bounds, expected 0 <", N, "<", &
+            self%pos_
+      call EXIT(-1)
+   end if
+   x = self%data(N)
+end function get
+
+elemental function size(self) result(N)
+   implicit none
+   class(TYPENAME), intent(in) :: self
+   integer                     :: N
+   N = self%pos_
+end function size
