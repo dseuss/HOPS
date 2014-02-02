@@ -1,0 +1,81 @@
+subroutine csr_sum_duplicates(Ai, Aj, Ax)
+   ! Sum together duplicate column entries in each row of CSR matrix A
+   ! The column indicies within each row must be in sorted order.
+   ! Explicit zeros are retained.
+   ! Ap, Aj, and Ax will be modified *inplace*
+   integer, intent(inout) :: Ai(:)
+   integer, intent(inout) :: Aj(:)
+   DTYPE, intent(inout)   :: Ax(:)
+
+   integer :: nnz, r1, r2, i, j, jj
+   DTYPE :: x
+   nnz = 1
+   r2 = 1
+   do i = 1, size(Ai) - 1
+      r1 = r2
+      r2 = Ai(i+1)
+      jj = r1
+      do while (jj < r2)
+         j = Aj(jj)
+         x = Ax(jj)
+         jj = jj + 1
+         do while (jj < r2)
+            if (Aj(jj) == j) then
+               x = x + Ax(jj)
+               jj = jj + 1
+            else
+               exit
+            end if
+         end do
+         Aj(nnz) = j
+         Ax(nnz) = x
+         nnz = nnz + 1
+      end do
+      Ai(i+1) = nnz
+   end do
+end subroutine csr_sum_duplicates
+
+
+subroutine csr_sort_indices(Ai, Aj, Ax)
+   ! Sort CSR column indices inplace
+   integer, intent(inout) :: Ai(:)
+   integer, intent(inout) :: Aj(:)
+   DTYPE, intent(inout)   :: Ax(:)
+
+   integer :: i, r1, r2, l, idx(size(Aj))
+   do i = 1, size(Ai)-1
+      r1 = Ai(i)
+      r2 = Ai(i+1)-1
+      l = r2-r1+1
+      idx(:l) = argsort(Aj(r1:r2))
+      Aj(r1:r2) = Aj(r1+idx(:l)-1)
+      Ax(r1:r2) = Ax(r1+idx(:l)-1)
+   end do
+end subroutine csr_sort_indices
+
+
+function argsort(a) result(b)
+   ! Returns the indices that would sort an array.
+   integer, intent(in) :: a(:)
+   integer             :: b(size(a))
+
+   integer :: N                           ! number of numbers/vectors
+   integer :: i,imin,relimin(1)           ! indices: i, i of smallest, relative imin
+   integer :: temp                        ! temporary
+   integer :: a2(size(a))
+   a2 = a
+   N=size(a)
+   do i = 1, N
+      b(i) = i
+   end do
+   do i = 1, N-1
+      ! find ith smallest in 'a'
+      relimin = minloc(a2(i:))
+      imin = relimin(1) + i - 1
+      ! swap to position i in 'a' and 'b', if not already there
+      if (imin /= i) then
+         temp = a2(i); a2(i) = a2(imin); a2(imin) = temp
+         temp = b(i); b(i) = b(imin); b(imin) = temp
+      end if
+   end do
+end function argsort

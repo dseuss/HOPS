@@ -3,6 +3,8 @@ use fruit
 use hstructtab_test
 use hstruct_test
 use noisegen_test
+use dynarray_test
+use sparse_test
 
 implicit none
 
@@ -17,7 +19,14 @@ call test_triangular_limited
 call test_triangular_coupling
 
 ! ExponentialNoiseGenerator test suite
-call test_noise_generator
+! call test_noise_generator
+
+! DynArray test
+call test_dynarray_reshape
+
+! SparseMatrix test suite
+call test_sparse_matmul
+call test_sparse_setblock
 
 call fruit_summary
 
