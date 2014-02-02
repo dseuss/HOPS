@@ -3,7 +3,7 @@ use system
 use dynarray_int
 use dynarray_cmplx
 implicit none
-include 'mkl.fi'
+! include 'mkl.fi'
 private
 
 type, public :: SparseMatrix
@@ -11,7 +11,6 @@ type, public :: SparseMatrix
    integer :: block_
    integer :: nnz_
 
-   ! integer, allocatable :: cooI_(:)
    type(IntDynamicArray)   :: cooI_
    type(IntDynamicArray)   :: cooJ_
    type(CmplxDynamicArray) :: cooA_
@@ -124,6 +123,7 @@ subroutine finalize(self)
    class(SparseMatrix) :: self
 
    integer :: job(8), info
+   ! TODO Remove duplicates by adding them together
    ! NOTE Sorting (setting job(1)=2) does not work properly
    ! see http://software.intel.com/en-us/forums/topic/375484
    job = [1, 0, 1, 0, self%nnz_, 0, 0, 0]
@@ -137,15 +137,11 @@ subroutine finalize(self)
    call self%cooJ_%free()
    call self%cooA_%free()
 
-   ! call csr_sort_indices(self%csrI_, self%csrJ_, self%csrA_)
-   ! call csr_sum_duplicates(self%csrI_, self%csrJ_, self%csrA_)
+   ! print *, ""
+   ! print *, "csrA_= ", self%csrA_
+   ! print *, "csrI_= ", self%csrI_
+   ! print *, "csrJ_= ", self%csrJ_
 
-   print *, ""
-   print *, "csrA_= ", self%csrA_
-   print *, "csrI_= ", self%csrI_
-   print *, "csrJ_= ", self%csrJ_
-
-   ! TODO Remove duplicates by adding them together
 end subroutine finalize
 
 
@@ -166,14 +162,5 @@ subroutine multiply(self, x, y, alpha)
       y = alpha * y
    end if
 end subroutine multiply
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!                               HELPER FUNCTIONS                               !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-#define DTYPE complex(dp)
-#include "sparse_template.src"
-#undef DTYPE
 
 end module sparse
