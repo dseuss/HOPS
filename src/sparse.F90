@@ -47,9 +47,9 @@ subroutine init(self, size, block, chunk)
       call self%cooJ_%init(chunk)
       call self%cooA_%init(chunk)
    else
-      call self%cooI_%init(1)
-      call self%cooJ_%init(1)
-      call self%cooA_%init(1)
+      call self%cooI_%init(size)
+      call self%cooJ_%init(size)
+      call self%cooA_%init(size)
    end if
 end subroutine init
 
@@ -101,7 +101,8 @@ subroutine add_block(self, i, j, vals)
 
    do m = 1, self%block_
       do n = 1, self%block_
-         call self%add(i + m - 1, j + n - 1, vals(m, n))
+         call self%add((i-1) * self%block_ + m, (j-1) * self%block_ + n, &
+               vals(m, n))
       end do
    end do
 end subroutine add_block
