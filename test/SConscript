@@ -1,16 +1,10 @@
-import sys
-sys.path.append('../')
-from conf import *
+from glob import glob
+from os.path import abspath
 
 Import('env')
-locenv = env.Clone(F90PATH=['../src/', '.'])
 
+sources = glob('*.f90') + glob('*.F90')
+# sources.remove()
+objs = env.Object(sources)
 
-locenv.Program('test',
-               ['../src/' + mod for mod in MODULES] +
-               ['hstructtab_test.f90',
-                'hstruct_test.f90',
-                'fruit.f90',
-                'fruit_util.f90',
-                'fruit_driver.f90']
-               )
+Return('objs')
