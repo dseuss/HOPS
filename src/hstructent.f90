@@ -1,4 +1,5 @@
 module hstructent
+use system
 implicit none
 
 private
@@ -8,7 +9,7 @@ type, public :: HStructureEntry
 
    contains
    procedure, public :: init
-   final :: free
+   procedure, public :: free
 end type HStructureEntry
 
 contains
@@ -29,8 +30,8 @@ end subroutine init
 
 subroutine free(self)
    implicit none
-   type(HStructureEntry) :: self
-   deallocate(self%vind)
+   class(HStructureEntry) :: self
+   call array_free(self%vind)
 end subroutine free
 
 end module hstructent

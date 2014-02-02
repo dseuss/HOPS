@@ -13,12 +13,15 @@ type, public :: HStructureTable
    integer :: modes_
    type(HStructureListPointer), allocatable :: data_(:)
 
+   ! FIXME Remove this
+   integer, allocatable :: bucketstatus_(:)
+
    contains
    private
    procedure hash
-   final :: free
 
    procedure, public :: init
+   procedure, public :: free
    procedure, public :: add
    procedure, public :: get
 
@@ -37,23 +40,33 @@ subroutine init(self, buckets, modes)
    self%buckets_ = buckets
    self%modes_ = modes
    allocate(self%data_(buckets))
+   allocate(self%bucketstatus_(buckets))
    do i=1, self%buckets_
       allocate(self%data_(i)%p)
+      self%data_(i)%p%next => null()
+      self%bucketstatus_(i) = 0
    end do
 end subroutine init
 
 
 subroutine free(self)
    implicit none
-   type(HStructureTable) :: self
+   class(HStructureTable) :: self
 
    integer :: i
 
    if (allocated(self%data_)) then
       do i=1, self%buckets_
          call self%data_(i)%p%free()
+         deallocate(self%data_(i)%p)
       end do
       deallocate(self%data_)
+   end if
+
+   if (allocated(self%bucketstatus_)) then
+      ! print *, ""
+      ! print *, "Bucket fill status", self%bucketstatus_
+      deallocate(self%bucketstatus_)
    end if
 end subroutine free
 
@@ -89,6 +102,7 @@ subroutine add(self, k, ind)
 
    hash = self%hash(k)
    call self%data_(hash)%p%add(k, ind)
+   self%bucketstatus_(hash) = self%bucketstatus_(hash) + 1
 end subroutine add
 
 

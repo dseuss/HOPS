@@ -1,4 +1,5 @@
 module hstruct
+use system
 use hstructtab, only: HStructureTable
 implicit none
 private
@@ -24,6 +25,7 @@ type, public :: HStructure
    procedure :: recursive_indices
 
    procedure, public :: init
+   procedure, public :: free
    procedure, public :: find_index
    procedure, public :: indab
    procedure, public :: indbl
@@ -123,6 +125,16 @@ subroutine init(self, modes, depth, populated_modes)
    end do
 
 end subroutine init
+
+
+subroutine free(self)
+   implicit none
+   class(HStructure) :: self
+   call array_free(self%indab_)
+   call array_free(self%indbl_)
+   call array_free(self%vecind_)
+   call self%intind_%free()
+end subroutine free
 
 
 function find_index(self, k) result(i)

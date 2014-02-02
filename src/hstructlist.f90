@@ -28,7 +28,6 @@ subroutine add(self, k, ind)
    type(HStructureList), pointer :: old
 
    old => self%next
-   self%next => NULL()
    allocate(self%next)
    self%next%next => old
    call self%next%val%init(k, ind)
@@ -38,10 +37,12 @@ recursive subroutine free(self)
    implicit none
    class(HStructureList) :: self
 
+   call self%val%free()
    if (associated(self%next)) then
       call self%next%free()
       deallocate(self%next)
    end if
+
 end subroutine free
 
 end module hstructlist

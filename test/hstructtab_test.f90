@@ -29,6 +29,8 @@ subroutine test_hashtab_add_and_lookup()
    call assert_equals(7, ht%get([9, 3, 1]))
    call assert_equals(8, ht%get([2, 7, 0]))
    call assert_equals(9, ht%get([1, 1, 1]))
+
+   call ht%free()
 end subroutine test_hashtab_add_and_lookup
 
 end module hstructtab_test
