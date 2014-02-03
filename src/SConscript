@@ -3,7 +3,6 @@ from glob import glob
 Import('env')
 
 sources = glob('*.f90') + glob('*.F90')
-sources.remove('hierarchy.f90')
 objs = env.Object(sources)
 
 Return('objs')

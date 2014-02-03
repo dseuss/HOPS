@@ -3,3 +3,4 @@ runtest
 *.mod
 *.pyc
 .sconsign.dblite
+*.so
