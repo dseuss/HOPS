@@ -4,3 +4,5 @@ runtest
 *.pyc
 .sconsign.dblite
 *.so
+*.os
+main

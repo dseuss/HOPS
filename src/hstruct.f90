@@ -31,6 +31,7 @@ type, public :: HStructure
    procedure, public :: indbl
    procedure, public :: vecind
    procedure, public :: entries
+   procedure, public :: print
 end type HStructure
 
 contains
@@ -184,6 +185,16 @@ elemental function entries(self)
    entries = self%entries_
 end function entries
 
+
+subroutine print(self)
+   implicit none
+   class(HStructure) :: self
+   integer :: ind
+
+   do ind = 1, self%entries_
+      print *, ind, "=>", self%vecind_(ind, :)
+   end do
+end subroutine print
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !                               HELPER FUNCTIONS                               !

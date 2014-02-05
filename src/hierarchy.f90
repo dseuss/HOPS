@@ -6,7 +6,8 @@ use sparse, only: SparseMatrix
 use iso_c_binding, only: c_double, c_double_complex, c_int, c_bool
 implicit none
 private
-public init, run_trajectory_z0_rk4
+public init, run_trajectory_z0_rk4, free, &
+      c_init, c_run_trajectory_z0_rk4, c_free
 
 integer, parameter :: &
       RK_COPIES = 6, &
@@ -80,8 +81,31 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    call setup_propagator_simple(struct, modes_, dim_, g, gamma, Omega, h, &
          Lmap, with_terminator)
 
+   !----------------------------------------------------------------------------
+   !TODO Make this optional
+   ! call struct%print()
+   ! call linProp_%print()
+
+   ! print *, "Hsys= ", h
+   ! print *, "g=", g
+   ! print *, "gamma=", gamma
+   ! print *, "Omega=", Omega
+   ! print *, "Lmap=", Lmap
+   !----------------------------------------------------------------------------
+
    call struct%free()
 end subroutine init
+
+
+subroutine c_free() bind(c)
+   implicit none
+   call free()
+end subroutine c_free
+
+subroutine free()
+   implicit none
+   call linProp_%free()
+end subroutine free
 
 
 subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
@@ -125,32 +149,32 @@ subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
             call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
                   hs_dim * (indab - 1) + Lmap(mode), &
                   (-1._dp, 0._dp))
-         else if (with_terminator) then
-            k_term = k
-            k_term(mode) = k_term(mode) + 1
-            k_dot_w = dot_product(k_term, gamma) + ii*dot_product(k_term, Omega)
+         ! else if (with_terminator) then
+         !    k_term = k
+         !    k_term(mode) = k_term(mode) + 1
+         !    k_dot_w = dot_product(k_term, gamma) + ii*dot_product(k_term, Omega)
 
-            do mode_term = 1, modes
-               if (mode_term == mode) then
-                  call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
-                        hs_dim * (entry - 1) + Lmap(mode), &
-                        -k_term(mode_term) * g(mode_term) / k_dot_w)
-                  cycle
-               end if
+         !    do mode_term = 1, modes
+         !       if (mode_term == mode) then
+         !          call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
+         !                hs_dim * (entry - 1) + Lmap(mode), &
+         !                -k_term(mode_term) * g(mode_term) / k_dot_w)
+         !          cycle
+         !       end if
 
-               if (struct%indbl(entry ,mode_term) == INVALID_INDEX) then
-                  cycle
-               end if
+         !       if (struct%indbl(entry ,mode_term) == INVALID_INDEX) then
+         !          cycle
+         !       end if
 
-               ind_term = struct%indab(struct%indbl(entry, mode_term), mode)
-               if (ind_term == INVALID_INDEX) then
-                  cycle
-               end if
+         !       ind_term = struct%indab(struct%indbl(entry, mode_term), mode)
+         !       if (ind_term == INVALID_INDEX) then
+         !          cycle
+         !       end if
 
-               call linProp_%add(hs_dim * (entry - 1) + Lmap(mode_term), &
-                     hs_dim * (ind_term - 1) + Lmap(mode_term), &
-                     -k_term(mode_term) * g(mode_term) / k_dot_w)
-            end do
+         !       call linProp_%add(hs_dim * (entry - 1) + Lmap(mode_term), &
+         !             hs_dim * (ind_term - 1) + Lmap(mode_term), &
+         !             -k_term(mode_term) * g(mode_term) / k_dot_w)
+         !    end do
          end if
       end do
    end do
@@ -185,10 +209,11 @@ function run_trajectory_z0_rk4(psi0) result(psi)
    complex(dp) :: hierarchy(size_, RK_COPIES), dt
    integer :: t
    !TODO Error Check
+   print *, "psi0 =", psi0
 
    dt = tLength_ / (tSteps_ - 1)
 
-   psi(:, 1) = psi0
+   psi(1, :) = psi0
    hierarchy = 0._dp
    hierarchy(1:dim_, RK_OLD) = psi0
 
@@ -204,11 +229,11 @@ function run_trajectory_z0_rk4(psi0) result(psi)
       hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + hierarchy(:, RK_3)
       call linProp_%multiply(hierarchy(:, RK_NEW), hierarchy(:, RK_4), dt)
 
-      hierarchy(:, RK_OLD) = hierarchy(:, RK_OLD) + &
-            ( 1./6. * hierarchy(:, RK_1) &
+      hierarchy(:, RK_OLD) = hierarchy(:, RK_OLD) &
+            + 1./6. * hierarchy(:, RK_1) &
             + 2./6. * hierarchy(:, RK_2) &
             + 2./6. * hierarchy(:, RK_3) &
-            + 1./6. * hierarchy(:, RK_4))
+            + 1./6. * hierarchy(:, RK_4)
       psi(t, :) = hierarchy(1:dim_, RK_OLD)
    end do
 end function run_trajectory_z0_rk4

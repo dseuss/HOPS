@@ -2,16 +2,15 @@
 # encoding: utf-8
 
 from __future__ import division, print_function
-# import sys
+import sys
 import numpy as np
 import h5py
 from time import strftime, time
-# import multiprocessing as mp
+import multiprocessing as mp
 
 import functions_ger as fg
 from libbath import OscillatorBath
-
-from libhierarchy import FHierarchy
+from libhierarchy import FHierarchy, set_omp_threads
 
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
@@ -49,15 +48,28 @@ class Hierarchy(object):
       assert(self._hamiltonian.shape[0] == self._hamiltonian.shape[1])
       assert(depth >= 0)
 
-      g = (np.ones([self._dimension])[:, None] * self._bath.g[None, :])
+      self._integrator = None
+      self.update_integrator()
+
+   def update_integrator(self):
+      """@todo: Docstring for update_integrator.
+      :returns: @todo
+
+      """
+      if self._integrator is not None:
+         del self._integrator
+
+      g = np.ones([self._dimension])[:, None] * self._bath.g[None, :]
       gamma = np.ones([self._dimension])[:, None] * self._bath.gamma[None, :]
       Omega = np.ones([self._dimension])[:, None] * self._bath.Omega[None, :]
-      Lmap = np.arange(1, self._dimension + 1)[:, None] \
-            * np.ones([1, self._bath.nrmodes], dtype=int)
+      Lmap = np.arange(1, self._dimension + 1)[:, None] * \
+            np.ones([self._bath.nrmodes], dtype=int)[None, :]
+      set_omp_threads(-1)
+      # FIXME Switch on terminator
       self._integrator = FHierarchy(self._tLength, self._tSteps, self._depth,
                                     g.flatten(), gamma.flatten(),
                                     Omega.flatten(), self._hamiltonian,
-                                    Lmap.flatten())
+                                    Lmap.flatten(), with_terminator=False)
 
    def _set_attrs(self, ds):
       """@todo: Docstring for _set_attrs.
@@ -363,9 +375,9 @@ class SpectrumHierarchy(Hierarchy):
 #          self._rho = ds.value
 
 
-###############################################################################
-#                              Helper Functions                               #
-###############################################################################
+# ###############################################################################
+# #                              Helper Functions                               #
+# ###############################################################################
 def LoadSpectrumFromFile(filename, label):
    """@todo: Docstring for LoadSpectrumFromFile.
 

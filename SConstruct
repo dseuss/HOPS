@@ -37,13 +37,10 @@ if not (FCC in ['ifort', 'gfortran']):
    print('ERROR: expected "ifort" or "gfortran", found ' + FCC)
    Exit(1)
 
-FLAGS = {'release': '-O3'.split(),
+FLAGS = {'release': '-fast'.split(),
          'debug': '-g -O0 -fPIC'.split()
          }
-F2PYFLAGS = {'ifort': '-lifcore -lifport'.split(),
-             'gfortran': '-lgfortran'.split()}
-F2PYCOMP = {'ifort': 'intel', 'gfortran': 'gnu95'}[FCC]
-
+LDFLAGS = {'ifort': '-openmp', 'gfortran': '-fopenmp'}[FCC].split()
 MKLROOT = os.environ['MKLROOT']
 ARCHBITS = architecture()[0][:2]
 GFORTRAN = {'gfortran': '-m{}'.format(ARCHBITS), 'ifort': ''}[FCC]
@@ -51,13 +48,13 @@ MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
 DIR = {'32': 'ia32', '64': 'intel64'}[ARCHBITS]
 IDENTIFIER = {'ifort32': 'intel', 'ifort64': 'intel_lp64',
               'gfortran32': 'gf', 'gfortran64': 'gf_lp64'}[FCC + ARCHBITS]
-MKLLD = ' -Wl,--start-group {MKLROOT}/lib/ia32/libmkl_gf.a {MKLROOT}/lib/ia32/libmkl_core.a {MKLROOT}/lib/ia32/libmkl_sequential.a -Wl,--end-group -lpthread -lm'.format(**locals())
+MKLLD = ' -Wl,--start-group {MKLROOT}/lib/ia32/libmkl_gf.a {MKLROOT}/lib/ia32/libmkl_core.a {MKLROOT}/lib/ia32/libmkl_sequential.a -Wl,--end-group -lpthread -lm'.format(**locals()).split()
 
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],
                   CCFLAGS=' -fPIC -O3 -I/usr/include/python2.7',
                   F90FLAGS=FLAGS[mode] + MKLFLAGS,
-                  _LIBFLAGS=MKLLD,
+                  _LIBFLAGS=MKLLD + LDFLAGS,
                   F90PATH='#/src /usr/include'.split(),
                   STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME=1
                   )
@@ -76,4 +73,5 @@ runtest = env.Program('runtest', objs + testobjs,
                       LIBPATH=['/usr/lib/i386-linux-gnu/'])
 libhierarchy = env.SharedLibrary('libhierarchy.so',
                                  ['src/libhierarchy.pyx'] + objs)
-Default(runtest)
+main = env.Program('main', objs + ['src/main.f90'])
+Default(libhierarchy)

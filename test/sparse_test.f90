@@ -13,17 +13,21 @@ subroutine test_sparse_matmul()
    complex(dp) :: x(2), y(2)
    call A%init(2, 1)
 
+   call A%add(2, 2, (4._dp, 1._dp))
    call A%add(1, 1, (1._dp, 0._dp))
    call A%add(1, 2, (2._dp, 0._dp))
-   call A%add(2, 2, (4._dp, 1._dp))
    call A%add(2, 1, (3._dp, 0._dp))
    call A%add(2, 2, (4._dp, 1._dp))
    call A%finalize()
    x = [1._dp, 2._dp]
    call A%multiply(x, y, (1._dp, 0._dp))
 
-   call assert_equals((5._dp, 0._dp), y(1))
-   call assert_equals((19._dp, 4._dp), y(2))
+   print *, ''
+   call A%print()
+   print *, ''
+
+   call assert_equals((5._dp, 0._dp), y(1), "matmul(1)")
+   call assert_equals((19._dp, 4._dp), y(2), "matmul(2)")
 
    call A%free()
 end subroutine test_sparse_matmul
@@ -42,8 +46,8 @@ subroutine test_sparse_setblock()
    x = [1._dp, 2._dp]
    call A%multiply(x, y, (1._dp, 0._dp))
 
-   call assert_equals((5._dp, 0._dp), y(1))
-   call assert_equals((11._dp, 0._dp), y(2))
+   call assert_equals((5._dp, 0._dp), y(1), "setblock(1)")
+   call assert_equals((11._dp, 0._dp), y(2), "setblock(2)")
 
    call A%free()
 end subroutine test_sparse_setblock

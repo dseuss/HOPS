@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as np
+cimport openmp
 import cython
 
 cdef extern:
@@ -9,6 +10,7 @@ cdef extern:
                int *populated_modes)
    void c_run_trajectory_z0_rk4(int *hs_dim, int *tSteps, complex *psi0,
                                 double complex *psi)
+   void c_free()
 
 
 cdef class FHierarchy(object):
@@ -30,10 +32,10 @@ cdef class FHierarchy(object):
       self._dim = h.shape[0]
       self._tSteps = tSteps
       cdef int populated_modesc
-      cdef int modes = g.size
-      assert(modes == gamma.size)
-      assert(modes == Omega.size)
-      assert(modes == Lmap.size)
+      cdef int modes = gc.size
+      assert(modes == gammac.size)
+      assert(modes == Omegac.size)
+      assert(modes == Lmapc.size)
       assert(hc.shape[0] == hc.shape[1])
 
       if populated_modes is None:
@@ -44,6 +46,9 @@ cdef class FHierarchy(object):
       c_init(&tLength, &tSteps, &depth, &modes, &self._dim, &gc[0], &gammac[0],
              &Omegac[0], &hc[0, 0], &Lmapc[0], &with_terminator,
              &populated_modesc)
+
+   def __dealloc__(self):
+      c_free()
 
    @cython.boundscheck(False)
    @cython.wraparound(False)
@@ -62,3 +67,13 @@ cdef class FHierarchy(object):
             np.empty([self._tSteps, self._dim], dtype=np.complex128, order='F')
       c_run_trajectory_z0_rk4(&self._dim, &self._tSteps, &psi0c[0], &psi[0, 0])
       return psi
+
+
+###############################################################################
+#                    Wrapper for further helper functions                     #
+###############################################################################
+def set_omp_threads(int omp_threads):
+   if omp_threads < 0:
+      openmp.omp_set_num_threads(openmp.omp_get_max_threads())
+   else:
+      openmp.omp_set_num_threads(omp_threads)
