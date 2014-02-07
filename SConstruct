@@ -27,7 +27,7 @@ def sortObjectFiles(scfile):
 
 # TODO This has terrible form!!!!!
 
-mode = ARGUMENTS.get('mode', 'release')
+mode = ARGUMENTS.get('mode', 'debug')
 if not (mode in ['debug', 'release']):
    print('ERROR: expected "debug" or "release", found ' + mode)
    Exit(1)
@@ -37,25 +37,29 @@ if not (FCC in ['ifort', 'gfortran']):
    print('ERROR: expected "ifort" or "gfortran", found ' + FCC)
    Exit(1)
 
-FLAGS = {'release': '-fast'.split(),
+FLAGS = {'release': '-O3'.split(),
          'debug': '-g -O0 -fPIC'.split()
          }
 LDFLAGS = {'ifort': '-openmp', 'gfortran': '-fopenmp'}[FCC].split()
+
 MKLROOT = os.environ['MKLROOT']
 ARCHBITS = architecture()[0][:2]
 GFORTRAN = {'gfortran': '-m{}'.format(ARCHBITS), 'ifort': ''}[FCC]
 MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
-DIR = {'32': 'ia32', '64': 'intel64'}[ARCHBITS]
+ARCHDIR = {'32': 'ia32', '64': 'intel64'}[ARCHBITS]
 IDENTIFIER = {'ifort32': 'intel', 'ifort64': 'intel_lp64',
               'gfortran32': 'gf', 'gfortran64': 'gf_lp64'}[FCC + ARCHBITS]
-MKLLD = ' -Wl,--start-group {MKLROOT}/lib/ia32/libmkl_gf.a {MKLROOT}/lib/ia32/libmkl_core.a {MKLROOT}/lib/ia32/libmkl_sequential.a -Wl,--end-group -lpthread -lm'.format(**locals()).split()
+THREADEDSWITCH = 'sequential'
+# THREADEDSWITCH = 'gnu_thread'
+# THREADEDSWITCH = 'intel_thread'
+MKLLD = ' -Wl,--start-group {MKLROOT}/lib/{ARCHDIR}/libmkl_{IDENTIFIER}.a {MKLROOT}/lib/{ARCHDIR}/libmkl_core.a {MKLROOT}/lib/{ARCHDIR}/libmkl_{THREADEDSWITCH}.a -Wl,--end-group -lpthread -lm'.format(**locals()).split()
 
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],
                   CCFLAGS=' -fPIC -O3 -I/usr/include/python2.7',
                   F90FLAGS=FLAGS[mode] + MKLFLAGS,
                   _LIBFLAGS=MKLLD + LDFLAGS,
-                  F90PATH='#/src /usr/include'.split(),
+                  F90PATH='#/src #src/zvode /usr/include'.split(),
                   STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME=1
                   )
 cyscons.generate(env)

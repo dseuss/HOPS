@@ -3,7 +3,6 @@ use system
 use dynarray_int
 use dynarray_cmplx
 implicit none
-! include 'mkl.fi'
 private
 
 type, public :: SparseMatrix
@@ -40,18 +39,20 @@ subroutine init(self, size, block, chunk)
    integer, intent(in)           :: block
    integer, intent(in), optional :: chunk
 
+   integer :: N
+
    self%size_ = size
    self%block_ = block
    self%nnz_ = 0
    if (present(chunk)) then
-      call self%cooI_%init(chunk)
-      call self%cooJ_%init(chunk)
-      call self%cooA_%init(chunk)
+      N = chunk
    else
-      call self%cooI_%init(size)
-      call self%cooJ_%init(size)
-      call self%cooA_%init(size)
+      N = size
    end if
+
+   call self%cooI_%init(N)
+   call self%cooJ_%init(N)
+   call self%cooA_%init(N)
 end subroutine init
 
 
@@ -85,8 +86,8 @@ subroutine add(self, i, j, val)
    end if
 
    self%nnz_ = self%nnz_ + 1
-   call self%cooI_%add(j)
-   call self%cooJ_%add(i)
+   call self%cooI_%add(i)
+   call self%cooJ_%add(j)
    call self%cooA_%add(val)
 end subroutine add
 
@@ -151,7 +152,7 @@ subroutine multiply(self, x, y, alpha)
    complex(dp), intent(out)          :: y(self%size_)
    complex(dp), intent(in), optional :: alpha
 
-   character, parameter :: trans = 't'
+   character, parameter :: trans = 'n'
 
    call mkl_cspblas_zcsrgemv(trans, self%size_, self%csrA_, self%csrI_, &
          self%csrJ_, x, y)

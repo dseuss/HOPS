@@ -22,10 +22,6 @@ subroutine test_sparse_matmul()
    x = [1._dp, 2._dp]
    call A%multiply(x, y, (1._dp, 0._dp))
 
-   print *, ''
-   call A%print()
-   print *, ''
-
    call assert_equals((5._dp, 0._dp), y(1), "matmul(1)")
    call assert_equals((19._dp, 4._dp), y(2), "matmul(2)")
 
