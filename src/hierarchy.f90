@@ -3,11 +3,11 @@ use system
 use hstruct, only: HStructure
 use hstructtab, only: INVALID_INDEX
 use sparse, only: SparseMatrix
-use iso_c_binding, only: c_double, c_double_complex, c_int, c_bool
 implicit none
 private
-public init, run_trajectory_z0_rk4, free, &
-      c_init, c_run_trajectory_z0_rk4, c_free
+public init, free, run_trajectory_z0_rk4, run_trajectory_z0_zvode, &
+      trajectory_step_z0
+
 
 integer, parameter :: &
       RK_COPIES = 6, &
@@ -17,7 +17,6 @@ integer, parameter :: &
       RK_2 = 4, &
       RK_3 = 5, &
       RK_4 = 6
-
 
 integer :: &
       depth_, &
@@ -33,23 +32,10 @@ type(SparseMatrix) :: linProp_
 
 contains
 
-subroutine c_init(tLength, tSteps, depth, modes, hs_dim, g, gamma, Omega, h, &
-         Lmap, with_terminator, populated_modes) bind(c)
-   real(c_double), intent(in)            :: tLength
-   integer(c_int), intent(in)            :: tSteps
-   integer(c_int), intent(in)            :: depth
-   integer(c_int), intent(in)            :: modes
-   integer(c_int), intent(in)            :: hs_dim
-   complex(c_double_complex), intent(in) :: g(modes)
-   real(c_double), intent(in)            :: gamma(modes)
-   real(c_double), intent(in)            :: Omega(modes)
-   complex(c_double_complex), intent(in) :: h(hs_dim, hs_dim)
-   integer(c_int), intent(in)            :: Lmap(modes)
-   logical(c_bool), intent(in)           :: with_terminator
-   integer(c_int), intent(in)            :: populated_modes
-   call init(tLength, tSteps, depth, g, gamma, omega, h, Lmap, &
-         logical(with_terminator), populated_modes)
-end subroutine c_init
+
+!!!!!!!!!!!!!!!!!!!!!!
+!  Setup & Managing  !
+!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
          with_terminator, populated_modes)
@@ -71,6 +57,7 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    ! TODO Error checks
    tLength_ = tLength
    tSteps_ = tSteps
+   dt_ = tLength / (tSteps_ - 1)
    dim_ = size(h(1, :))
    modes_ = size(g)
 
@@ -96,11 +83,6 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    call struct%free()
 end subroutine init
 
-
-subroutine c_free() bind(c)
-   implicit none
-   call free()
-end subroutine c_free
 
 subroutine free()
    implicit none
@@ -183,33 +165,17 @@ subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
 end subroutine setup_propagator_simple
 
 
-subroutine c_run_trajectory_z0_rk4(hs_dim, tSteps, psi0, psi) bind(c)
-   implicit none
-   integer(c_int), intent(in) :: hs_dim
-   integer(c_int), intent(in) :: tSteps
-   complex(c_double_complex), intent(in) :: psi0(hs_dim)
-   complex(c_double_complex), intent(out) :: psi(tSteps, hs_dim)
-
-   if ((hs_dim /= dim_) .or. (tSteps /= tSteps_)) then
-      print *, 'ERROR: Wrong parameters in C-wrapper.'
-      call Exit(1)
-   end if
-   psi = run_trajectory_z0_rk4(psi0)
-end subroutine c_run_trajectory_z0_rk4
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  Spectrum Calculation  !
+!!!!!!!!!!!!!!!!!!!!!!!!!!
 function run_trajectory_z0_rk4(psi0) result(psi)
    implicit none
    complex(dp), intent(in) :: psi0(dim_)
    complex(dp)             :: psi(tSteps_, dim_)
-   !----------------------------------------------------------------------------
-   !F2PY INTENT(IN) psi0, hs_dim, tSteps
-   !F2PY INTENT(OUT) psi
-   !----------------------------------------------------------------------------
 
    complex(dp) :: hierarchy(size_, RK_COPIES), dt
    integer :: t
    !TODO Error Check
-   print *, "psi0 =", psi0
 
    dt = tLength_ / (tSteps_ - 1)
 
@@ -237,5 +203,95 @@ function run_trajectory_z0_rk4(psi0) result(psi)
       psi(t, :) = hierarchy(1:dim_, RK_OLD)
    end do
 end function run_trajectory_z0_rk4
+
+subroutine trajectory_step_z0(NEQ, T, Y, YDOT)
+   implicit none
+   integer, intent(in) :: NEQ
+   real(dp), intent(in)     :: T
+   complex(dp), intent(in)  :: Y(NEQ)
+   complex(dp), intent(out) :: YDOT(NEQ)
+
+   ! FIXME Disable this outside debug mode
+   if (NEQ /= size_) then
+      print *, 'Error in trajectory_step_z0: input/output has wrong shape.'
+   end if
+
+   call linProp_%multiply(Y, YDOT)
+end subroutine trajectory_step_z0
+
+subroutine trajectory_jac_z0(NEQ, T, Y, ML, MU, PD, NROWPD, RPAR, IPAR)
+   integer :: NEQ
+   real(dp) :: T
+   complex(dp) :: Y(NEQ)
+   integer :: ML
+   integer :: MU
+   complex(dp) :: PD(NROWPD, NEQ)
+   integer :: NROWPD
+   real(dp) :: RPAR(*)
+   integer :: IPAR(*)
+end subroutine trajectory_jac_z0
+
+function run_trajectory_z0_zvode(psi0) result(psi)
+   implicit none
+   complex(dp), intent(in) :: psi0(dim_)
+   complex(dp)             :: psi(tSteps_, dim_)
+
+   integer :: t
+
+   integer, parameter :: MF = 10 ! (or 22 for stiff)
+   complex(dp), allocatable :: psi_hierarchy(:), ZWORK(:)
+   real(dp), allocatable :: RWORK(:)
+   integer, allocatable :: IWORK(:)
+   integer :: LZW, LRW, LIW, flag
+   real(dp), parameter :: RPAR(1) = [0._dp]
+   integer, parameter :: IPAR(1) = [0]
+   real(dp) :: t_current
+
+   print *, 'Using ZVODE'
+   allocate(psi_hierarchy(size_))
+   psi_hierarchy = 0._dp
+   psi_hierarchy(1:dim_) = psi0
+
+   select case (MF)
+      case(10)
+         LZW = 15*size_*2
+         LIW = 30
+      case(22)
+         LZW = 8*size_ * 2*size_**2
+         LIW = 30 + size_
+      end select
+   LRW = 20 + size_
+
+   allocate(ZWORK(LZW), RWORK(LRW), IWORK(LIW))
+
+   t_current = 0._dp
+   flag = 1
+   do t = 1, tSteps_ - 1
+      call ZVODE (&
+            trajectory_step_z0, & ! F
+            size_,              & ! NEQ
+            psi_hierarchy,      & ! Y
+            t_current,          & ! T
+            t*dt_,              & ! TOUT
+            1,                  & ! ITOL (ATOL is scalar)
+            1.D-7,              & ! RTOL
+            0._dp,             & ! ATOL
+            1,                  & ! ITASK
+            flag,               & ! ISTATE
+            0,                  & ! IOPT
+            ZWORK,              & ! ZWORK
+            LZW,                & ! LZW
+            RWORK,              & ! RWORK
+            LRW,                & ! LRW
+            IWORK,              & ! IWORK
+            LIW,                & ! LIW
+            trajectory_jac_z0,  & ! JAC (this is just dummy variable)
+            MF                  & ! MF
+            )
+      print *, t_current
+      psi(t+1, :) = psi_hierarchy(1:dim_)
+   end do
+   deallocate(psi_hierarchy, ZWORK, RWORK, IWORK)
+end function run_trajectory_z0_zvode
 
 end module hierarchy

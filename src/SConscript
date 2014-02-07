@@ -2,7 +2,7 @@ from glob import glob
 
 Import('env')
 
-sources = glob('*.f90') + glob('*.F90')
+sources = glob('*.f90') + glob('*.F90') + glob('zvode/*.f')
 sources.remove('main.f90')
 objs = env.Object(sources)
 

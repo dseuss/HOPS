@@ -10,6 +10,8 @@ cdef extern:
                int *populated_modes)
    void c_run_trajectory_z0_rk4(int *hs_dim, int *tSteps, complex *psi0,
                                 double complex *psi)
+   void c_run_trajectory_z0_zvode(int *hs_dim, int *tSteps, complex *psi0,
+                                double complex *psi)
    void c_free()
 
 
@@ -18,6 +20,7 @@ cdef class FHierarchy(object):
    """Docstring for FHierarchy. """
 
    cdef int _tSteps
+   cdef double _tLength
    cdef int _dim
 
    def __init__(self, double tLength, int tSteps, int depth, g, gamma, Omega,
@@ -31,6 +34,7 @@ cdef class FHierarchy(object):
 
       self._dim = h.shape[0]
       self._tSteps = tSteps
+      self._tLength = tLength
       cdef int populated_modesc
       cdef int modes = gc.size
       assert(modes == gammac.size)
@@ -52,7 +56,7 @@ cdef class FHierarchy(object):
 
    @cython.boundscheck(False)
    @cython.wraparound(False)
-   def run_trajectory_z0(self, psi0):
+   def run_trajectory_z0(self, psi0, integrator='rk4'):
       """@todo: Docstring for run_trajectory_z0.
 
       :psi0: @todo
@@ -62,12 +66,16 @@ cdef class FHierarchy(object):
       cdef double complex[:] psi0c = np.array(psi0, dtype=np.complex128,
                                                  order='F')
       assert(psi0c.size == self._dim)
-
       cdef np.ndarray[double complex, mode='fortran', ndim=2] psi = \
             np.empty([self._tSteps, self._dim], dtype=np.complex128, order='F')
-      c_run_trajectory_z0_rk4(&self._dim, &self._tSteps, &psi0c[0], &psi[0, 0])
-      return psi
 
+      if integrator == 'zvode':
+         c_run_trajectory_z0_zvode(&self._dim, &self._tSteps, &psi0c[0],
+                                 &psi[0, 0])
+      else:
+         c_run_trajectory_z0_rk4(&self._dim, &self._tSteps, &psi0c[0],
+                                 &psi[0, 0])
+      return psi
 
 ###############################################################################
 #                    Wrapper for further helper functions                     #
