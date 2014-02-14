@@ -12,10 +12,10 @@ import functions_ger as fg
 from libbath import OscillatorBath
 from libhierarchy import FHierarchy, set_omp_threads
 
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
-mpi_size = comm.Get_size()
-mpi_rank = comm.Get_rank()
+# from mpi4py import MPI
+# comm = MPI.COMM_WORLD
+# mpi_size = comm.Get_size()
+# mpi_rank = comm.Get_rank()
 
 OUTPUT_DELAY = 10
 
@@ -69,7 +69,7 @@ class Hierarchy(object):
       self._integrator = FHierarchy(self._tLength, self._tSteps, self._depth,
                                     g.flatten(), gamma.flatten(),
                                     Omega.flatten(), self._hamiltonian,
-                                    Lmap.flatten(), with_terminator=False)
+                                    Lmap.flatten())
 
    def _set_attrs(self, ds):
       """@todo: Docstring for _set_attrs.

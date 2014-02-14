@@ -22,8 +22,8 @@ integer :: &
       depth_, &
       modes_, &
       dim_, &
-      size_, &
       tSteps_
+integer, public :: size_
 real(dp) :: &
       tLength_, &
       dt_
@@ -131,32 +131,32 @@ subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
             call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
                   hs_dim * (indab - 1) + Lmap(mode), &
                   (-1._dp, 0._dp))
-         ! else if (with_terminator) then
-         !    k_term = k
-         !    k_term(mode) = k_term(mode) + 1
-         !    k_dot_w = dot_product(k_term, gamma) + ii*dot_product(k_term, Omega)
+         else if (with_terminator) then
+            k_term = k
+            k_term(mode) = k_term(mode) + 1
+            k_dot_w = dot_product(k_term, gamma) + ii*dot_product(k_term, Omega)
 
-         !    do mode_term = 1, modes
-         !       if (mode_term == mode) then
-         !          call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
-         !                hs_dim * (entry - 1) + Lmap(mode), &
-         !                -k_term(mode_term) * g(mode_term) / k_dot_w)
-         !          cycle
-         !       end if
+            do mode_term = 1, modes
+               if (mode_term == mode) then
+                  call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
+                        hs_dim * (entry - 1) + Lmap(mode), &
+                        -k_term(mode_term) * g(mode_term) / k_dot_w)
+                  cycle
+               end if
 
-         !       if (struct%indbl(entry ,mode_term) == INVALID_INDEX) then
-         !          cycle
-         !       end if
+               if (struct%indbl(entry ,mode_term) == INVALID_INDEX) then
+                  cycle
+               end if
 
-         !       ind_term = struct%indab(struct%indbl(entry, mode_term), mode)
-         !       if (ind_term == INVALID_INDEX) then
-         !          cycle
-         !       end if
+               ind_term = struct%indab(struct%indbl(entry, mode_term), mode)
+               if (ind_term == INVALID_INDEX) then
+                  cycle
+               end if
 
-         !       call linProp_%add(hs_dim * (entry - 1) + Lmap(mode_term), &
-         !             hs_dim * (ind_term - 1) + Lmap(mode_term), &
-         !             -k_term(mode_term) * g(mode_term) / k_dot_w)
-         !    end do
+               call linProp_%add(hs_dim * (entry - 1) + Lmap(mode_term), &
+                     hs_dim * (ind_term - 1) + Lmap(mode_term), &
+                     -k_term(mode_term) * g(mode_term) / k_dot_w)
+            end do
          end if
       end do
    end do
@@ -204,6 +204,7 @@ function run_trajectory_z0_rk4(psi0) result(psi)
    end do
 end function run_trajectory_z0_rk4
 
+
 subroutine trajectory_step_z0(NEQ, T, Y, YDOT)
    implicit none
    integer, intent(in) :: NEQ
@@ -219,26 +220,22 @@ subroutine trajectory_step_z0(NEQ, T, Y, YDOT)
    call linProp_%multiply(Y, YDOT)
 end subroutine trajectory_step_z0
 
-subroutine trajectory_jac_z0(NEQ, T, Y, ML, MU, PD, NROWPD, RPAR, IPAR)
-   integer :: NEQ
-   real(dp) :: T
-   complex(dp) :: Y(NEQ)
-   integer :: ML
-   integer :: MU
-   complex(dp) :: PD(NROWPD, NEQ)
-   integer :: NROWPD
-   real(dp) :: RPAR(*)
-   integer :: IPAR(*)
+
+! Dummy routine
+subroutine trajectory_jac_z0()
 end subroutine trajectory_jac_z0
 
-function run_trajectory_z0_zvode(psi0) result(psi)
+
+function run_trajectory_z0_zvode(psi0, method, rtol, atol) result(psi)
    implicit none
    complex(dp), intent(in) :: psi0(dim_)
    complex(dp)             :: psi(tSteps_, dim_)
+   integer, intent(in)     :: method
+   real(dp), intent(in)    :: rtol
+   real(dp), intent(in)    :: atol
 
    integer :: t
 
-   integer, parameter :: MF = 10 ! (or 22 for stiff)
    complex(dp), allocatable :: psi_hierarchy(:), ZWORK(:)
    real(dp), allocatable :: RWORK(:)
    integer, allocatable :: IWORK(:)
@@ -247,12 +244,7 @@ function run_trajectory_z0_zvode(psi0) result(psi)
    integer, parameter :: IPAR(1) = [0]
    real(dp) :: t_current
 
-   print *, 'Using ZVODE'
-   allocate(psi_hierarchy(size_))
-   psi_hierarchy = 0._dp
-   psi_hierarchy(1:dim_) = psi0
-
-   select case (MF)
+   select case (method)
       case(10)
          LZW = 15*size_*2
          LIW = 30
@@ -263,19 +255,23 @@ function run_trajectory_z0_zvode(psi0) result(psi)
    LRW = 20 + size_
 
    allocate(ZWORK(LZW), RWORK(LRW), IWORK(LIW))
+   allocate(psi_hierarchy(size_))
+   psi_hierarchy = 0._dp
+   psi_hierarchy(1:dim_) = psi0
 
    t_current = 0._dp
    flag = 1
+   psi(1, :) = psi0
    do t = 1, tSteps_ - 1
       call ZVODE (&
             trajectory_step_z0, & ! F
             size_,              & ! NEQ
             psi_hierarchy,      & ! Y
             t_current,          & ! T
-            t*dt_,              & ! TOUT
+            t_current+dt_,      & ! TOUT
             1,                  & ! ITOL (ATOL is scalar)
-            1.D-7,              & ! RTOL
-            0._dp,             & ! ATOL
+            rtol,               & ! RTOL
+            atol,               & ! ATOL
             1,                  & ! ITASK
             flag,               & ! ISTATE
             0,                  & ! IOPT
@@ -286,9 +282,9 @@ function run_trajectory_z0_zvode(psi0) result(psi)
             IWORK,              & ! IWORK
             LIW,                & ! LIW
             trajectory_jac_z0,  & ! JAC (this is just dummy variable)
-            MF                  & ! MF
+            method              & ! MF
             )
-      print *, t_current
+      ! FIXME Check the error flag
       psi(t+1, :) = psi_hierarchy(1:dim_)
    end do
    deallocate(psi_hierarchy, ZWORK, RWORK, IWORK)

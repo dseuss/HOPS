@@ -45,14 +45,15 @@ LDFLAGS = {'ifort': '-openmp', 'gfortran': '-fopenmp'}[FCC].split()
 MKLROOT = os.environ['MKLROOT']
 ARCHBITS = architecture()[0][:2]
 GFORTRAN = {'gfortran': '-m{}'.format(ARCHBITS), 'ifort': ''}[FCC]
-MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
 ARCHDIR = {'32': 'ia32', '64': 'intel64'}[ARCHBITS]
 IDENTIFIER = {'ifort32': 'intel', 'ifort64': 'intel_lp64',
               'gfortran32': 'gf', 'gfortran64': 'gf_lp64'}[FCC + ARCHBITS]
 THREADEDSWITCH = 'sequential'
 # THREADEDSWITCH = 'gnu_thread'
 # THREADEDSWITCH = 'intel_thread'
+
 MKLLD = ' -Wl,--start-group {MKLROOT}/lib/{ARCHDIR}/libmkl_{IDENTIFIER}.a {MKLROOT}/lib/{ARCHDIR}/libmkl_core.a {MKLROOT}/lib/{ARCHDIR}/libmkl_{THREADEDSWITCH}.a -Wl,--end-group -lpthread -lm'.format(**locals()).split()
+MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
 
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],

@@ -40,14 +40,36 @@ subroutine c_run_trajectory_z0_rk4(hs_dim, tSteps, psi0, psi) bind(c)
 end subroutine c_run_trajectory_z0_rk4
 
 
-subroutine c_run_trajectory_z0_zvode(hs_dim, tSteps, psi0, psi) bind(c)
+subroutine c_run_trajectory_z0_zvode(hs_dim, tSteps, psi0, psi, method, rtol, &
+         atol) bind(c)
    implicit none
    integer(c_int), intent(in) :: hs_dim
    integer(c_int), intent(in) :: tSteps
    complex(c_double_complex), intent(in) :: psi0(hs_dim)
    complex(c_double_complex), intent(out) :: psi(tSteps, hs_dim)
-   psi = run_trajectory_z0_zvode(psi0)
+   integer(c_int), intent(in) :: method
+   real(c_double), intent(in) :: rtol
+   real(c_double), intent(in) :: atol
+
+   psi = run_trajectory_z0_zvode(psi0, method, rtol, atol)
 end subroutine c_run_trajectory_z0_zvode
+
+
+subroutine c_trajectory_step_z0(NEQ, T, psi, psi_dot) bind(c)
+   implicit none
+   integer(c_int), intent(in)                 :: NEQ
+   real(c_double), intent(in)             :: T
+   complex(c_double_complex), intent(in)  :: psi(NEQ)
+   complex(c_double_complex), intent(out) :: psi_dot(NEQ)
+   call trajectory_step_z0(NEQ, T, psi, psi_dot)
+end subroutine c_trajectory_step_z0
+
+
+subroutine c_get_size(mysize) bind(c)
+   implicit none
+   integer(c_int), intent(out) :: mysize
+   mysize = size_
+end subroutine c_get_size
 
 
 end module hierarchy_interface
