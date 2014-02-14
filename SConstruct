@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# encoding: utf-8
-
 from __future__ import division, print_function
 import os
 from platform import architecture
@@ -37,7 +34,7 @@ if not (FCC in ['ifort', 'gfortran']):
    print('ERROR: expected "ifort" or "gfortran", found ' + FCC)
    Exit(1)
 
-FLAGS = {'release': '-O3'.split(),
+FLAGS = {'release': '-O3 -fPIC'.split(),
          'debug': '-g -O0 -fPIC'.split()
          }
 LDFLAGS = {'ifort': '-openmp', 'gfortran': '-fopenmp'}[FCC].split()
@@ -58,6 +55,7 @@ MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],
                   CCFLAGS=' -fPIC -O3 -I/usr/include/python2.7',
+                  FORTRANFLAGS=FLAGS[mode] + MKLFLAGS,
                   F90FLAGS=FLAGS[mode] + MKLFLAGS,
                   _LIBFLAGS=MKLLD + LDFLAGS,
                   F90PATH='#/src #src/zvode /usr/include'.split(),
