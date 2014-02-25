@@ -113,11 +113,16 @@ end subroutine init
 
 subroutine free()
    implicit none
+   integer :: i
 
-   deallocate(h_, g_, gamma_, Omega_, Lmap_)
    call linProp_%free()
    call noiseProp_%free()
    call nonlinProp_%free()
+   do i = 1, size(noisegen_)
+      call noisegen_(i)%free()
+   end do
+
+   deallocate(h_, g_, gamma_, Omega_, Lmap_, noisegen_)
 end subroutine free
 
 
