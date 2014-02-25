@@ -6,3 +6,5 @@ runtest
 *.so
 *.os
 main
+*.h5
+data
