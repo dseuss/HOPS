@@ -58,7 +58,6 @@ subroutine init(self, dt, tSteps, g, gamma, Omega)
       end if
    end do
 
-
    plan = fftw_plan_dft_1d(2*tSteps, alpha, self%sqrtJ_, FFTW_FORWARD, &
          FFTW_ESTIMATE)
    call fftw_execute_dft(plan, alpha, self%sqrtJ_)
