@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 from __future__ import division, print_function
-import sys
+# import sys
 import numpy as np
 import h5py
 from time import strftime, time
@@ -10,12 +10,12 @@ import multiprocessing as mp
 
 import functions_ger as fg
 from libbath import OscillatorBath
-from libhierarchy import FHierarchy, set_omp_threads
+from libhierarchy import FHierarchy, set_omp_threads, init_random_seed
 
-# from mpi4py import MPI
-# comm = MPI.COMM_WORLD
-# mpi_size = comm.Get_size()
-# mpi_rank = comm.Get_rank()
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+mpi_size = comm.Get_size()
+mpi_rank = comm.Get_rank()
 
 OUTPUT_DELAY = 10
 
@@ -211,173 +211,174 @@ class SpectrumHierarchy(Hierarchy):
 ###############################################################################
 #                           class TransferHierarchy                           #
 ###############################################################################
-# class TransferHierarchy(Hierarchy):
+class TransferHierarchy(Hierarchy):
 
-#    """Docstring for TransferHierarchy. """
+   """Docstring for TransferHierarchy. """
 
-#    def __init__(self, tLength, tSteps, hamiltonian, bath, depth,
-#                 filename='transfer.h5'):
-#       """@todo: to be defined1.
+   def __init__(self, tLength, tSteps, hamiltonian, bath, depth,
+                filename='transfer.h5'):
+      """@todo: to be defined1.
 
-#       :tLength: @todo
-#       :tSteps: @todo
-#       :hamiltonian: @todo
-#       :bath: @todo
-#       :depth
-#       :filename: @todo
+      :tLength: @todo
+      :tSteps: @todo
+      :hamiltonian: @todo
+      :bath: @todo
+      :depth
+      :filename: @todo
 
-#       """
-#       Hierarchy.__init__(self, tLength, tSteps, hamiltonian, bath, depth,
-#                          filename)
-#       self._rho = None
+      """
+      Hierarchy.__init__(self, tLength, tSteps, hamiltonian, bath, depth,
+                         filename)
+      self._rho = None
 
-#    def _get_rho_partial(self, realizations, psi0, label, id, omp_threads,
-#                         result):
-#       """Calculate the reduced density operator for a given number of
-#       realizations in a single thread. THIS IS WHERE THE MAIN WORK IS DONE!
+   def _get_rho_partial(self, realizations, psi0, label, id, omp_threads,
+                        result):
+      """Calculate the reduced density operator for a given number of
+      realizations in a single thread. THIS IS WHERE THE MAIN WORK IS DONE!
 
-#       :realizations: @todo
-#       :psi0: @todo
-#       :label: @todo
-#       :returns: @todo
+      :realizations: @todo
+      :psi0: @todo
+      :label: @todo
+      :returns: @todo
 
-#       """
-#       print('Thread nr. {} [{}] with {} realizations'.format(id, mpi_rank,
-#                                                              realizations))
-#       rho = np.zeros((self._tSteps, self._dimension, self._dimension),
-#                      dtype=complex)
-#       lh.set_omp_threads(omp_threads)
-#       t_output = time()
-#       for i in xrange(realizations):
-#          # FIXME Better status update
-#          if time() - t_output > OUTPUT_DELAY:
-#             print('{} [{}] -- {}/{}'.format(id, mpi_rank, i, realizations))
-#             t_output = time()
-#          psi = self._integrator.run_trajectory(psi0)
-#          norm = np.sum(np.conj(psi) * psi, axis=1)[:, None, None]
-#          rho += np.conj(psi[:, None, :]) * psi[:, :, None] / norm
-#       result.put(rho)
+      """
+      print('Thread nr. {} [{}] with {} realizations'.format(id, mpi_rank,
+                                                             realizations))
+      rho = np.zeros((self._tSteps, self._dimension, self._dimension),
+                     dtype=complex)
+      set_omp_threads(omp_threads)
+      init_random_seed()
+      t_output = time()
+      for i in xrange(realizations):
+         # FIXME Better status update
+         if time() - t_output > OUTPUT_DELAY:
+            print('{} [{}] -- {}/{}'.format(id, mpi_rank, i, realizations))
+            t_output = time()
+         psi = self._integrator.run_trajectory(psi0)
+         norm = np.sum(np.conj(psi) * psi, axis=1)[:, None, None]
+         rho += np.conj(psi[:, None, :]) * psi[:, :, None] / norm
+      result.put(rho)
 
-#    def _get_rho_total(self, realizations, psi0, num_threads, omp_threads,
-#                       label):
-#       """Calculate the reduced density operator on the local machine by
-#       distributing work over multiple threads for calculating independent
-#       realizations.
+   def _get_rho_total(self, realizations, psi0, num_threads, omp_threads,
+                      label):
+      """Calculate the reduced density operator on the local machine by
+      distributing work over multiple threads for calculating independent
+      realizations.
 
-#       :realizations: @todo
-#       :psi0: @todo
-#       :num_threads: @todo
-#       :label: @todo
-#       :returns: @todo
+      :realizations: @todo
+      :psi0: @todo
+      :num_threads: @todo
+      :label: @todo
+      :returns: @todo
 
-#       """
-#       traj_id = np.array_split(np.arange(realizations), num_threads)
-#       results = mp.Queue()
-#       processes = [mp.Process(target=self._get_rho_partial,
-#                               args=(traj_id[i].size, psi0, label, i,
-#                                     omp_threads, results))
-#                    for i in range(num_threads)]
+      """
+      traj_id = np.array_split(np.arange(realizations), num_threads)
+      results = mp.Queue()
+      processes = [mp.Process(target=self._get_rho_partial,
+                              args=(traj_id[i].size, psi0, label, i,
+                                    omp_threads, results))
+                   for i in range(num_threads)]
 
-#       for p in processes:
-#          p.start()
-#       rho = [results.get() for p in processes]
-#       for p in processes:
-#          p.join()
+      for p in processes:
+         p.start()
+      rho = [results.get() for p in processes]
+      for p in processes:
+         p.join()
 
-#       return np.sum(rho, axis=0)
+      return np.sum(rho, axis=0)
 
-#    # FIXME omp_threads isnt doing anything!
-#    def calc(self, realizations, psi0, num_threads=-1, omp_threads=1,
-#             label=None, normalize=True):
-#       """Calculate reduced density operator for given number of realizations.
-#       This function manly distributes and gathers all calculation over multiple
-#       MPI-nodes.
+   def calc(self, realizations, psi0, num_threads=-1, omp_threads=1,
+            label=None, normalize=True):
+      """Calculate reduced density operator for given number of realizations.
+      This function manly distributes and gathers all calculation over multiple
+      MPI-nodes.
 
-#       :realizations:
-#       :psi0:
-#       :num_threads: Number of threads used on the local machine for calculating
-#                     independent run_trajectories.
-#       :omp_threads: Number of threads used for parallel calculation of matrix-
-#                     multiplications.
-#       :label:
-#       :normalize: Normalize the final result to Tr ρ = 1
+      :realizations:
+      :psi0:
+      :num_threads: Number of threads used on the local machine for calculating
+                    independent run_trajectories.
+      :omp_threads: Number of threads used for parallel calculation of matrix-
+                    multiplications.
+      :label:
+      :normalize: Normalize the final result to Tr ρ = 1
 
-#       """
-#       realizations_local = int(realizations/mpi_size)
-#       if mpi_rank < realizations - realizations_local*mpi_size:
-#          realizations_local += 1
+      """
+      realizations_local = int(realizations/mpi_size)
+      if mpi_rank < realizations - realizations_local*mpi_size:
+         realizations_local += 1
 
-#       rho = self._get_rho_total(realizations_local, psi0, num_threads,
-#                                 omp_threads, label)
+      rho = self._get_rho_total(realizations_local, psi0, num_threads,
+                                omp_threads, label)
 
-#       rho = comm.gather(rho, root=0)
-#       if mpi_rank == 0:
-#          # TODO Add save to file
-#          t = np.linspace(0, self._tLength, self._tSteps)
-#          self._rho = np.sum(rho, axis=0)
-#          if label is not None:
-#             self.to_file(label)
-#          return t, self._get(normalize)
-#       else:
-#          return None, None
+      rho = comm.gather(rho, root=0)
 
-#    def _get(self, normalize=True):
-#       """Returns the calculated density operator.
+      if mpi_rank == 0:
+         # TODO Add save to file
+         t = np.linspace(0, self._tLength, self._tSteps)
+         self._rho = np.sum(rho, axis=0)
+         if label is not None:
+            self.to_file(label)
+         return t, self._get(normalize)
+      else:
+         return None, None
 
-#       :normalize: @todo
-#       :returns: @todo
+   def _get(self, normalize=True):
+      """Returns the calculated density operator.
 
-#       """
-#       assert(self._rho is not None)
-#       if normalize:
-#          return self._rho /\
-#                np.trace(self._rho, axis1=1, axis2=2)[:, None, None]
-#       else:
-#          return self._rho
+      :normalize: @todo
+      :returns: @todo
 
-#    def to_file(self, label=None):
-#       """@todo: Docstring for to_file.
+      """
+      assert(self._rho is not None)
+      if normalize:
+         return self._rho /\
+               np.trace(self._rho, axis1=1, axis2=2)[:, None, None]
+      else:
+         return self._rho
 
-#       :label: @todo
-#       :returns: @todo
+   def to_file(self, label=None):
+      """@todo: Docstring for to_file.
 
-#       """
-#       if mpi_rank != 0:
-#          return
+      :label: @todo
+      :returns: @todo
 
-#       assert(self._rho is not None)
+      """
+      if mpi_rank != 0:
+         return
 
-#       if label is None:
-#          lab = strftime('%Y-%m-%d_%H:%M')
-#       else:
-#          lab = label
+      assert(self._rho is not None)
 
-#       with h5py.File(self._filename, 'a') as ofile:
-#          if lab in ofile:
-#             del ofile[lab]
-#          ds = ofile.create_dataset(lab, data=self._rho)
-#          self._set_attrs(ds)
-#          ds.attrs.create('type', 'transfer_fixed')
+      if label is None:
+         lab = strftime('%Y-%m-%d_%H:%M')
+      else:
+         lab = label
 
-#    def from_file(self, filename, label):
-#       """@todo: Docstring for from_file.
+      with h5py.File(self._filename, 'a') as ofile:
+         if lab in ofile:
+            del ofile[lab]
+         ds = ofile.create_dataset(lab, data=self._rho)
+         self._set_attrs(ds)
+         ds.attrs.create('type', 'transfer_fixed')
 
-#       :filename: @todo
-#       :label: @todo
-#       :returns: @todo
+   def from_file(self, filename, label):
+      """@todo: Docstring for from_file.
 
-#       """
-#       self._filename = filename
-#       with h5py.File(self._filename, 'r') as ofile:
-#          ds = ofile[label]
-#          assert(ds.attrs['type'] == 'transfer_fixed')
-#          self._get_attrs(ds)
-#          self._rho = ds.value
+      :filename: @todo
+      :label: @todo
+      :returns: @todo
+
+      """
+      self._filename = filename
+      with h5py.File(self._filename, 'r') as ofile:
+         ds = ofile[label]
+         assert(ds.attrs['type'] == 'transfer_fixed')
+         self._get_attrs(ds)
+         self._rho = ds.value
 
 
-# ###############################################################################
-# #                              Helper Functions                               #
-# ###############################################################################
+###############################################################################
+#                              Helper Functions                               #
+###############################################################################
 def LoadSpectrumFromFile(filename, label):
    """@todo: Docstring for LoadSpectrumFromFile.
 

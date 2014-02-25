@@ -11,7 +11,7 @@ subroutine test_randomsparse_resetval()
    type(RandomSparseMatrix) :: A
    complex(dp) :: x(2), y(2), Z(2)
 
-   call A%init(2, 1, 2)
+   call A%init(2, 2)
    call A%add(1, 1, 1, (0.5_dp, 0._dp))
    call A%add(1, 2, 1, (1._dp, 0._dp))
    call A%add(2, 1, 2, (1.5_dp, 0._dp))

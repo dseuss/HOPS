@@ -3,32 +3,48 @@ use system
 use hstruct, only: HStructure
 use hstructtab, only: INVALID_INDEX
 use sparse, only: SparseMatrix
+use randomsparse, only: RandomSparseMatrix
+use noisegen, only: ExponentialNoiseGenerator, init_random_seed
 implicit none
 private
 public init, free, run_trajectory_z0_rk4, run_trajectory_z0_zvode, &
-      trajectory_step_z0
+      trajectory_step_z0, run_trajectory_rk4
 
 
 integer, parameter :: &
-      RK_COPIES = 6, &
+      RK_COPIES = 7, &
       RK_OLD = 1, &
       RK_NEW = 2, &
       RK_1 = 3, &
       RK_2 = 4, &
       RK_3 = 5, &
-      RK_4 = 6
+      RK_4 = 6, &
+      RK_BUF = 7
 
 integer :: &
       depth_, &
       modes_, &
       dim_, &
       tSteps_
-integer, public :: size_
+integer, public :: &
+      size_
+integer, allocatable :: &
+      Lmap_(:)
+complex(dp), allocatable :: &
+      g_(:), &
+      h_(:, :)
+real(dp), allocatable :: &
+      gamma_(:), &
+      Omega_(:)
 real(dp) :: &
       tLength_, &
       dt_
 
 type(SparseMatrix) :: linProp_
+type(RandomSparseMatrix) :: noiseProp_
+type(RandomSparseMatrix) :: nonlinProp_
+
+type(ExponentialNoiseGenerator), allocatable :: noisegen_(:)
 
 contains
 
@@ -61,12 +77,23 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    dim_ = size(h(1, :))
    modes_ = size(g)
 
+   allocate(h_(dim_, dim_), g_(modes_), gamma_(modes_), Omega_(modes_), &
+         Lmap_(modes_))
+   h_ = h
+   g_ = g
+   gamma_ = gamma
+   Omega_ = Omega
+   Lmap_ = Lmap
+
    call struct%init(modes_, depth, populated_modes)
    size_ = struct%entries() * dim_
-   call linProp_%init(size_, dim_)
 
-   call setup_propagator_simple(struct, modes_, dim_, g, gamma, Omega, h, &
-         Lmap, with_terminator)
+   call linProp_%init(size_, dim_)
+   call setup_propagator_simple(struct, with_terminator)
+   call setup_noiseprop_simple(struct, with_terminator)
+   call setup_nonlinprop_simple(struct, with_terminator)
+
+   call init_random_seed()
 
    !----------------------------------------------------------------------------
    !TODO Make this optional
@@ -86,61 +113,58 @@ end subroutine init
 
 subroutine free()
    implicit none
+
+   deallocate(h_, g_, gamma_, Omega_, Lmap_)
    call linProp_%free()
+   call noiseProp_%free()
+   call nonlinProp_%free()
 end subroutine free
 
 
-subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
-         Lmap, with_terminator)
+subroutine setup_propagator_simple(struct, with_terminator)
    implicit none
    type(HStructure), intent(in) :: struct
-   integer, intent(in)          :: modes
-   integer, intent(in)          :: hs_dim
-   complex(dp), intent(in)      :: g(modes)
-   real(dp), intent(in)         :: gamma(modes)
-   real(dp), intent(in)         :: Omega(modes)
-   complex(dp), intent(in)      :: h(hs_dim, hs_dim)
-   integer, intent(in)          :: Lmap(modes)
    logical, intent(in)          :: with_terminator
    !----------------------------------------------------------------------------
-   integer :: entry, mode, mode_term, k(modes), k_term(modes), i
+   integer :: entry, mode, mode_term, k(modes_), k_term(modes_), i
    integer :: indbl, indab, indbl_term, ind_term
-   complex(dp) :: identity(hs_dim, hs_dim), k_dot_w
+   complex(dp) :: identity(dim_, dim_), k_dot_w
    ! TODO Error checks
 
    identity = 0._dp
-   do i = 1, hs_dim
+   do i = 1, dim_
       identity(i, i) = (1._dp, 0._dp)
    end do
 
    do entry = 1, struct%entries()
       k = struct%vecind(entry)
-      k_dot_w = dot_product(k, gamma) + ii*dot_product(k, Omega)
-      call linProp_%add_block(entry, entry, -ii*h - k_dot_w*identity)
-      do mode = 1, modes
+      k_dot_w = dot_product(k, gamma_) + ii*dot_product(k, Omega_)
+      call linProp_%add_block(entry, entry, -ii*h_ - k_dot_w*identity)
+      do mode = 1, modes_
          indbl = struct%indbl(entry, mode)
          indab = struct%indab(entry, mode)
 
          if (indbl /= INVALID_INDEX) then
-            call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
-                  hs_dim * (indbl - 1) + Lmap(mode), &
-                  k(mode) * g(mode))
+            call linProp_%add(dim_ * (entry - 1) + Lmap_(mode), &
+                  dim_ * (indbl - 1) + Lmap_(mode), &
+                  k(mode) * g_(mode))
          end if
 
          if (indab /= INVALID_INDEX) then
-            call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
-                  hs_dim * (indab - 1) + Lmap(mode), &
+            call linProp_%add(dim_ * (entry - 1) + Lmap_(mode), &
+                  dim_ * (indab - 1) + Lmap_(mode), &
                   (-1._dp, 0._dp))
          else if (with_terminator) then
             k_term = k
             k_term(mode) = k_term(mode) + 1
-            k_dot_w = dot_product(k_term, gamma) + ii*dot_product(k_term, Omega)
+            k_dot_w = dot_product(k_term, gamma_) &
+                  + ii*dot_product(k_term, Omega_)
 
-            do mode_term = 1, modes
+            do mode_term = 1, modes_
                if (mode_term == mode) then
-                  call linProp_%add(hs_dim * (entry - 1) + Lmap(mode), &
-                        hs_dim * (entry - 1) + Lmap(mode), &
-                        -k_term(mode_term) * g(mode_term) / k_dot_w)
+                  call linProp_%add(dim_ * (entry - 1) + Lmap_(mode), &
+                        dim_ * (entry - 1) + Lmap_(mode), &
+                        -k_term(mode_term) * g_(mode_term) / k_dot_w)
                   cycle
                end if
 
@@ -153,9 +177,9 @@ subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
                   cycle
                end if
 
-               call linProp_%add(hs_dim * (entry - 1) + Lmap(mode_term), &
-                     hs_dim * (ind_term - 1) + Lmap(mode_term), &
-                     -k_term(mode_term) * g(mode_term) / k_dot_w)
+               call linProp_%add(dim_ * (entry - 1) + Lmap_(mode_term), &
+                     dim_ * (ind_term - 1) + Lmap_(mode_term), &
+                     -k_term(mode_term) * g_(mode_term) / k_dot_w)
             end do
          end if
       end do
@@ -163,6 +187,193 @@ subroutine setup_propagator_simple(struct, modes, hs_dim, g, gamma, Omega, h, &
 
    call linProp_%finalize()
 end subroutine setup_propagator_simple
+
+
+subroutine setup_noiseprop_simple(struct, with_terminator)
+   implicit none
+   type(HStructure), intent(in) :: struct
+   logical, intent(in)          :: with_terminator
+   !----------------------------------------------------------------------------
+
+   integer :: i, j, counter, entry
+   ! Copies of bcf-parameters for noise generator
+   complex(dp) :: gc(modes_)
+   real(dp) :: gammac(modes_), Omegac(modes_)
+
+   call noiseProp_%init(size_, dim_)
+   do entry = 1, struct%entries()
+      do i = 1, dim_
+         call noiseProp_%add((entry - 1)*dim_ + i, (entry - 1)*dim_ + i, i)
+      end do
+   end do
+   call noiseProp_%finalize()
+
+   allocate(noisegen_(dim_))
+   do i = 1, dim_
+      counter = 1
+      gc = (0._dp, 0._dp)
+      gammac = 0._dp
+      Omegac = 0._dp
+      do j = 1, modes_
+         if (Lmap_(j) == i) then
+            gc(counter) = g_(j)
+            gammac(counter) = gamma_(j)
+            Omegac(counter) = Omega_(j)
+            counter = counter + 1
+         end if
+      end do
+      call noisegen_(i)%init(dt_/2., 2*tSteps_, gc, gammac, Omegac)
+   end do
+end subroutine setup_noiseprop_simple
+
+
+subroutine setup_nonlinprop_simple(struct, with_terminator)
+   implicit none
+   type(HStructure), intent(in) :: struct
+   logical, intent(in)          :: with_terminator
+   !----------------------------------------------------------------------------
+
+   integer :: entry, mode, j, mode_term, ind_term, indab, k(modes_), &
+         k_term(modes_)
+   complex(dp) :: k_dot_w
+
+   call nonlinProp_%init(size_, dim_)
+
+   do entry = 1, struct%entries()
+      k = struct%vecind(entry)
+      do mode = 1, modes_
+         indab = struct%indab(entry, mode)
+
+         if (indab /= INVALID_INDEX) then
+            do j = 1, dim_
+               call nonlinProp_%add((entry - 1)*dim_ + j, &
+                     (indab - 1)*dim_ + j, &
+                     Lmap_(mode))
+            end do
+
+         else if (with_terminator) then
+            k_term = k
+            k_term(mode) = k_term(mode) + 1
+            k_dot_w = dot_product(k_term, gamma_) &
+                  + ii*dot_product(k_term, Omega_)
+
+            do mode_term = 1, modes_
+               if (mode_term == mode) then
+                  call nonlinProp_%add(dim_ * (entry - 1) + Lmap_(mode_term), &
+                        dim_ * (entry - 1) + Lmap_(mode_term), &
+                        Lmap_(mode), &
+                        k_term(mode_term) * g_(mode_term) / k_dot_w)
+                  cycle
+               end if
+
+               if (struct%indbl(entry ,mode_term) == INVALID_INDEX) then
+                  cycle
+               end if
+
+               ind_term = struct%indab(struct%indbl(entry, mode_term), mode)
+               if (ind_term == INVALID_INDEX) then
+                  cycle
+               end if
+
+               call nonlinProp_%add(dim_ * (entry - 1) + Lmap_(mode_term), &
+                     dim_ * (entry - 1) + Lmap_(mode_term), &
+                     Lmap_(mode), &
+                     k_term(mode_term) * g_(mode_term) / k_dot_w)
+            end do
+         end if
+      end do
+   end do
+
+   call nonlinProp_%finalize()
+end subroutine setup_nonlinprop_simple
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  Transfer Calculation  !
+!!!!!!!!!!!!!!!!!!!!!!!!!!
+! TODO Make this more compliant with usual integrator-rules
+subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
+   implicit none
+   real(dp), intent(in)       :: dt
+   complex(dp), intent(inout) :: hierarchy(size_, RK_COPIES)
+   complex(dp), intent(inout) :: memTerms(modes_, RK_COPIES)
+   complex(dp), intent(in)    :: Zt(dim_)
+   integer, intent(in)        :: rk_step
+
+   complex(dp) :: Z_cp(dim_)
+   complex(dp) :: ExpL(dim_)
+   integer :: i
+
+   ExpL = Abs(hierarchy(1:dim_, RK_NEW))**2 / &
+         dot_product(hierarchy(1:dim_, RK_NEW), hierarchy(1:dim_, RK_NEW))
+
+   Z_cp = conjg(Zt)
+   ! Z_cp = (Zt)
+   do i = 1, modes_
+      Z_cp(Lmap_(i)) = Z_cp(Lmap_(i)) + memTerms(i, RK_NEW)
+   end do
+
+   memTerms(:, rk_step) = dt * (conjg(g_) * ExpL(Lmap_) &
+         + (-gamma_ + ii*Omega_) * memTerms(:, RK_NEW))
+
+   call linProp_%multiply(hierarchy(:, RK_NEW), hierarchy(:, rk_step))
+   ! TODO Do this without extra buffer?
+   call noiseProp_%multiply(Z_cp, hierarchy(:, RK_NEW), &
+         hierarchy(:, RK_BUF))
+   hierarchy(:, rk_step) = hierarchy(:, rk_step) +  hierarchy(:, RK_BUF)
+   call nonlinprop_%multiply(expl, hierarchy(:, rk_new), hierarchy(:, RK_BUF))
+   hierarchy(:, rk_step) = dt_ * (hierarchy(:, rk_step) + hierarchy(:, RK_BUF))
+end subroutine trajectory_step_rk4
+
+
+function run_trajectory_rk4(psi0) result(psi)
+   implicit none
+   complex(dp), intent(in) :: psi0(dim_)
+   complex(dp) :: psi(tSteps_, dim_)
+
+   complex(dp) :: hierarchy(size_, RK_COPIES), Z(dim_, 2*tSteps_)
+   complex(dp) :: memTerms(modes_, RK_COPIES)
+   integer :: t, i
+   !TODO Error Check
+
+   psi(1, :) = psi0
+   hierarchy = 0._dp
+   hierarchy(1:dim_, RK_OLD) = psi0
+   memTerms = (0._dp, 0._dp)
+
+   do i = 1, dim_
+      Z(i, :) = noisegen_(i)%get_realization()
+   end do
+
+   do t = 2, tSteps_
+      hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD)
+      memTerms(:, RK_NEW) = memTerms(:, RK_OLD)
+      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-3), RK_1)
+
+      hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + .5*hierarchy(:, RK_1)
+      memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + .5*memTerms(:, RK_1)
+      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_2)
+
+      hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + .5*hierarchy(:, RK_2)
+      memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + .5*memTerms(:, RK_2)
+      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_3)
+
+      hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + hierarchy(:, RK_3)
+      memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + memTerms(:, RK_3)
+      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-1), RK_4)
+
+      hierarchy(:, RK_OLD) = hierarchy(:, RK_OLD) &
+            + 1./6. * hierarchy(:, RK_1) &
+            + 2./6. * hierarchy(:, RK_2) &
+            + 2./6. * hierarchy(:, RK_3) &
+            + 1./6. * hierarchy(:, RK_4)
+      memTerms(:, RK_OLD) = memTerms(:, RK_OLD) &
+            + 1./6. * memTerms(:, RK_1) &
+            + 2./6. * memTerms(:, RK_2) &
+            + 2./6. * memTerms(:, RK_3) &
+            + 1./6. * memTerms(:, RK_4)
+      psi(t, :) = hierarchy(1:dim_, RK_OLD)
+   end do
+end function run_trajectory_rk4
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -1,3 +1,6 @@
+! TODO Make another one not based on MKL with direct multiplication (instead
+! of resetting data.
+
 module randomsparse
 use system
 use dynarray_int
@@ -8,7 +11,6 @@ private
 
 type, public :: RandomSparseMatrix
    integer :: size_
-   integer :: block_
    integer :: num_proc_
    integer :: nnz_
 
@@ -34,18 +36,16 @@ end type RandomSparseMatrix
 
 contains
 
-subroutine init(self, size, block, num_proc, chunk)
+subroutine init(self, size, num_proc, chunk)
    implicit none
    class(RandomSparseMatrix)           :: self
    integer, intent(in)           :: size
-   integer, intent(in)           :: block
    integer, intent(in)           :: num_proc
    integer, intent(in), optional :: chunk
 
    integer :: N
 
    self%size_ = size
-   self%block_ = block
    self%nnz_ = 0
    self%num_proc_ = num_proc
    if (present(chunk)) then

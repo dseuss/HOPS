@@ -141,6 +141,8 @@ subroutine finalize(self)
    call self%cooI_%free()
    call self%cooJ_%free()
    call self%cooA_%free()
+
+   ! self%nnz_ = csr_sum_duplicates(self%csrI_, self%csrJ_, self%csrA_)
 end subroutine finalize
 
 
@@ -202,5 +204,48 @@ subroutine print(self)
    print *, "csrI:", self%csrI_
    print *, "csrJ:", self%csrJ_
 end subroutine print
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!                               Helper Functions                               !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+function csr_sum_duplicates(Ai, Aj, Ax) result(nnz)
+   ! Sum together duplicate column entries in each row of CSR matrix A
+   ! The column indicies within each row must be in sorted order.
+   ! Explicit zeros are retained.
+   ! Ap, Aj, and Ax will be modified *inplace*
+   integer, intent(inout)     :: Ai(:)
+   integer, intent(inout)     :: Aj(:)
+   complex(dp), intent(inout) :: Ax(:)
+   integer                    :: nnz
+
+   integer :: r1, r2, i, j, jj
+   complex(dp) :: x
+
+   nnz = 1
+   r2 = 1
+   do i = 1, size(Ai) - 1
+      r1 = r2
+      r2 = Ai(i+1)
+      jj = r1
+      do while (jj < r2)
+         j = Aj(jj)
+         x = Ax(jj)
+         jj = jj + 1
+         do while (jj < r2)
+            if (Aj(jj) == j) then
+               x = x + Ax(jj)
+               jj = jj + 1
+            else
+               exit
+            end if
+         end do
+         Aj(nnz) = j
+         Ax(nnz) = x
+         nnz = nnz + 1
+      end do
+      Ai(i+1) = nnz
+   end do
+end function
 
 end module sparse

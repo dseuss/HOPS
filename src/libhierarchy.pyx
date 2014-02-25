@@ -8,6 +8,8 @@ cdef extern:
                int *hs_dim, double complex *g, double *gamma, double *Omega,
                double complex *h, int *Lmap, bint *with_terminator,
                int *populated_modes)
+   void c_run_trajectory_rk4(int *hs_dim, int *tSteps, complex *psi0,
+                             double complex *psi)
    void c_run_trajectory_z0_rk4(int *hs_dim, int *tSteps, complex *psi0,
                                 double complex *psi)
    void c_run_trajectory_z0_zvode(int *hs_dim, int *tSteps, complex *psi0,
@@ -17,6 +19,9 @@ cdef extern:
                                  double complex *psi_dot)
    void c_get_size(int *size)
    void c_free()
+
+cdef extern:
+   void c_init_random_seed()
 
 
 cdef class FHierarchy(object):
@@ -63,6 +68,22 @@ cdef class FHierarchy(object):
 
    def __dealloc__(self):
       c_free()
+
+   @cython.boundscheck(False)
+   @cython.wraparound(False)
+   def run_trajectory(self, psi0):
+      """@todo: Docstring for run_trajectory.
+
+      :psi0: @todo
+      :returns: @todo
+
+      """
+      cdef double complex[:] psi0c = np.array(psi0, dtype=np.complex128,
+                                             order='F')
+      cdef np.ndarray[double complex, mode='fortran', ndim=2] psi = \
+            np.empty([self._tSteps, self._dim], dtype=np.complex128, order='F')
+      c_run_trajectory_rk4(&self._dim, &self._tSteps, &psi0c[0], &psi[0, 0])
+      return psi
 
    @cython.boundscheck(False)
    @cython.wraparound(False)
@@ -114,3 +135,6 @@ def set_omp_threads(int omp_threads):
       openmp.omp_set_num_threads(openmp.omp_get_max_threads())
    else:
       openmp.omp_set_num_threads(omp_threads)
+
+def init_random_seed():
+   c_init_random_seed()

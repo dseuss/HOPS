@@ -78,5 +78,7 @@ runtest = env.Program('runtest', objs + testobjs,
                       LIBPATH=['/usr/lib/i386-linux-gnu/'])
 libhierarchy = env.SharedLibrary('libhierarchy.so',
                                  ['src/libhierarchy.pyx'] + objs)
+libnoise = env.SharedLibrary('libnoise.so',
+                                 ['src/libnoise.pyx'] + objs)
 main = env.Program('main', objs + ['src/main.f90'])
 Default(libhierarchy)

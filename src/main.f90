@@ -19,6 +19,6 @@ complex(dp) :: psi(tSteps, 2)
 
 call init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, with_terminator, &
       populated_modes)
-psi = run_trajectory_z0_rk4(psi0)
+psi = run_trajectory_rk4(psi0)
 call free()
 end program main
