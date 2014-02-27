@@ -80,7 +80,8 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    allocate(h_(dim_, dim_), g_(modes_), gamma_(modes_), Omega_(modes_), &
          Lmap_(modes_))
    h_ = h
-   g_ = g
+   ! TODO Why is this conj(g)
+   g_ = conjg(g)
    gamma_ = gamma
    Omega_ = Omega
    Lmap_ = Lmap

@@ -124,7 +124,7 @@ class SpectrumHierarchy(Hierarchy):
                          filename)
       self._psi = None
 
-   def calc_trajectory(self, psi0=None, label=None):
+   def calc_trajectory(self, psi0=None, label=None, integrator='rk4', **kwargs):
       """Calculate linear trajectory
 
       :tLength: @todo
@@ -139,7 +139,8 @@ class SpectrumHierarchy(Hierarchy):
       else:
          psi_init = psi0
 
-      self._psi = self._integrator.run_trajectory_z0(psi_init)
+      self._psi = self._integrator.run_trajectory_z0(psi_init, integrator,
+                                                     **kwargs)
 
       if label is not None:
          self.to_file(label=label)
@@ -185,12 +186,14 @@ class SpectrumHierarchy(Hierarchy):
       else:
          lab = label
 
+      print('Saving ' + label + ' in ' + self._filename)
       with h5py.File(self._filename, 'a') as ofile:
          if lab in ofile:
             del ofile[lab]
          ds = ofile.create_dataset(lab, data=self._psi)
          self._set_attrs(ds)
          ds.attrs.create('type', 'spectrum_fixed')
+         ofile.flush()
 
    def from_file(self, filename, label):
       """@todo: Docstring for from_file.
