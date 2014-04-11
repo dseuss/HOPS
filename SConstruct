@@ -39,6 +39,7 @@ FLAGS = {'release': '-O3 -fPIC'.split(),
          }
 LDFLAGS = {'ifort': '-openmp', 'gfortran': '-fopenmp'}[FCC].split()
 
+# /usr/local/intel/composerxe/2013.sp1.1.106/composer_xe_2013_sp1.1.106/mkl
 MKLROOT = os.environ['MKLROOT']
 ARCHBITS = architecture()[0][:2]
 GFORTRAN = {'gfortran': '-m{}'.format(ARCHBITS), 'ifort': ''}[FCC]
