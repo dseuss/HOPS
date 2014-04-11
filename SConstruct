@@ -54,7 +54,7 @@ MKLFLAGS = '{GFORTRAN} -I{MKLROOT}/include'.format(**locals()).split()
 
 env = Environment(ENV=os.environ,
                   tools=['default', FCC],
-                  CCFLAGS=' -fPIC -O3 -I/usr/include/python2.7',
+                  CCFLAGS=' -fPIC -O3 -I/usr/include/python2.7 -I/usr/local/lib64/python2.7/site-packages/numpy/core/include',
                   FORTRANFLAGS=FLAGS[mode] + MKLFLAGS,
                   F90FLAGS=FLAGS[mode] + MKLFLAGS,
                   _LIBFLAGS=MKLLD + LDFLAGS,

@@ -12,10 +12,15 @@ import functions_ger as fg
 from libbath import OscillatorBath
 from libhierarchy import FHierarchy, set_omp_threads, init_random_seed
 
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
-mpi_size = comm.Get_size()
-mpi_rank = comm.Get_rank()
+try:
+   from mpi4py import MPI
+   comm = MPI.COMM_WORLD
+   mpi_size = comm.Get_size()
+   mpi_rank = comm.Get_rank()
+except ImportError:
+   comm = None
+   mpi_size = 1
+   mpi_rank = 0
 
 OUTPUT_DELAY = 10
 

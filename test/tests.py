@@ -6,7 +6,7 @@ import unittest
 import numpy as np
 
 import sys
-sys.path.append('/home/dsuess/Documents/FHOPS/')
+sys.path.append('..')
 from hierarchy import SpectrumHierarchy
 from libbath import OscillatorBath
 import functions_ger as fg
