@@ -29,7 +29,11 @@ cdef extern:
 
 cdef class _HierarchyIntegrator(object):
 
-    """Docstring for FHierarchy. """
+    """ Interface to the Fortran hierarchy integrator.
+    IMPORTANT: Do not create an instance of this class manually, use the
+               fIntegrator provided. Since the underlying Fortran object is
+               a module, at most one instance at every time is allowed.
+    """
 
     cdef int _tSteps
     cdef double _tLength
@@ -38,22 +42,42 @@ cdef class _HierarchyIntegrator(object):
 
     cdef bool _initialized
 
-    @property
-    def size(self):
-        return self._size
-
     def __init__(self):
-        """@todo: Docstring for __init__.
+        """
+        The underlying Fortran integrator is not initialized by default, call
+        the update function before calculations.
         """
         self._initialized = False
 
     def update(self, double tLength, int tSteps, int depth, g, gamma, Omega,
-               h, Lmap, bint with_terminator=True, populated_modes=None):
-        """@todo: to be defined1. """
+               h, Lmap, bint with_terminator, int populated_modes=0):
+        """ Initializes the underlying Fortran integrator.
+        This overwrites prior set parameters -- integrator is not reentrant.
+        The bath correlation function is parametrized according to
+
+            alpha(t) = sum_i g_i * exp(-gamma_i * |t| - ii * Omega_i * t).
+
+        :tLength: Propagation time
+        :tSteps: Number of time steps
+        :depth: Depth of the hierarchy
+        :g[modes]: Array of coupling strengths in bcf
+        :gamma[modes]: Array of dampings in bcf
+        :Omega[modes]: Array of Frequencies in bcf
+        :h[dim, dim]: System hamiltonian
+        :Lmap[modes]: Maps the individual modes to the corresponding coupling
+                      operator, i.e. i-th mode couples with L_Lmap[i],
+                      where L_j = |pi_j><pi_j|.
+        :with_terminator(true): Use the standard terminator?
+        :populated_modes(0): Discard all auxiliary states with excitations
+                             on more than populated_modes modes. If this is
+                             smaller than 1, no states are discarded.
+
+        """
         if self._initialized:
-            warn("WARNING: Overwritting old hierarchy-integrator. Libhierachy is not reentrant.")
+            warn("WARNING: Overwriting old hierarchy-integrator. Libhierachy is not reentrant.")
             c_free()
 
+        # Convert bcf parameters to numpy arrays, so that we can also pass lists
         cdef double complex[:] gc = np.array(g, dtype=np.complex128, order='F')
         cdef double[:] gammac = np.array(gamma, dtype=np.float64, order='F')
         cdef double[:] Omegac = np.array(Omega, dtype=np.float64, order='F')
@@ -71,7 +95,7 @@ cdef class _HierarchyIntegrator(object):
         assert(modes == Lmapc.size)
         assert(hc.shape[0] == hc.shape[1])
 
-        if populated_modes is None:
+        if populated_modes < 1:
             populated_modesc = modes
         else:
             populated_modesc = populated_modes
@@ -83,18 +107,19 @@ cdef class _HierarchyIntegrator(object):
         self._initialized = True
 
     def __dealloc__(self):
-        """@todo: Docstring for __del__.
-        """
         if self._initialized:
             c_free()
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def run_trajectory(self, psi0):
-        """@todo: Docstring for run_trajectory.
+        """ Calculates a normalizable quantum trajectory.
+        Initialize the integrator first using update(). The solutions are not
+        normalized, but allow for a normalization when taking the average
+        (non-normalized, but Girsanov-shifted trajectories).
 
-        :psi0: @todo
-        :returns: @todo
+        :psi0[dim]: Initial state
+        :returns: psi[tSteps, dim], quantum trajectory
 
         """
         cdef double complex[:] psi0c = np.array(psi0, dtype=np.complex128,
@@ -108,14 +133,21 @@ cdef class _HierarchyIntegrator(object):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def run_trajectory_z0(self, psi0, integrator='rk4', **kwargs):
-        """@todo: Docstring for run_trajectory_z0.
+        """ Calculates the solution psi(Z=0) of the linear hierarchy
 
-        :psi0: @todo
-        :returns: @todo
+        :psi0[dim]: Initial state
+        :integrator: Determines the integrator used, possible values: rk4, zvode
+        :returns: psi[tSteps, dim], quantum trajectory
+
+        Additional keyword arguments for integrator == zvode:
+        :method: Determines the algorithm, possible values: adams, bcf
+        :rtol: Relative tolerance
+        :atol: Absolute tolerance
 
         """
         cdef double complex[:] psi0c = np.array(psi0, dtype=np.complex128,
                                                 order='F')
+        # Determine the arguments for zvode
         method_tag = kwargs.get('method', 'adams')
         method_flags = {'adams': 10, 'bcf': 22}
         cdef int method = method_flags[method_tag]
@@ -137,11 +169,13 @@ cdef class _HierarchyIntegrator(object):
         return psi
 
     def trajectory_step_z0(self, double t, double complex[:] psi):
-        """@todo: Docstring for trajectoy_step_z0.
+        """ Integration step for run_trajectory_z0.
+        For use with external integrator, provides the internal integration step
+        used in the Fortran integrator.
 
-        :t: @todo
-        :psi: @todo
-        :returns: @todo
+        :t: Time (irrelevant since problem is time-independent)
+        :psi: Full hierarchy state
+        :returns: psi_dot, the lhs of the evolution equation
 
         """
         cdef double complex[:] psi_dot = \
@@ -156,7 +190,13 @@ fIntegrator = _HierarchyIntegrator()
 #                    Wrapper for further helper functions                     #
 ###############################################################################
 def set_omp_threads(int omp_threads):
-    if omp_threads < 0:
+    """ Set the number of threads used by OpenMP
+
+    :omp_threads: Number of threads, if omp_threads < 1 the maximum number of
+                  threads is used.
+
+    """
+    if omp_threads < 1:
         openmp.omp_set_num_threads(openmp.omp_get_max_threads())
     else:
         openmp.omp_set_num_threads(omp_threads)
@@ -164,7 +204,7 @@ def set_omp_threads(int omp_threads):
 
 cdef extern:
     void c_init_random_seed()
-
 def init_random_seed():
+    """ Sets the random seed to a random value. """
     c_init_random_seed()
 
