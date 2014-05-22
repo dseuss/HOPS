@@ -17,6 +17,8 @@ call test_hashtab_add_and_lookup
 ! HStructure test suite
 call test_triangular_completeness
 call test_triangular_limited
+call test_triangular_cutoff
+call test_triangular_cutoff_limited
 call test_triangular_coupling
 
 ! ExponentialNoiseGenerator test suite
