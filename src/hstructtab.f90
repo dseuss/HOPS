@@ -1,4 +1,4 @@
-! NOTE: All final keywords are incompatible with gfortran 4.8
+! Hash table for hierarchy-structure entries HStructureEntry.
 module hstructtab
 
 use hstructlist, only: HStructureList, HStructureListPointer
@@ -12,9 +12,6 @@ type, public :: HStructureTable
    integer :: buckets_
    integer :: modes_
    type(HStructureListPointer), allocatable :: data_(:)
-
-   ! FIXME Remove this
-   integer, allocatable :: bucketstatus_(:)
 
    contains
    private
@@ -40,11 +37,9 @@ subroutine init(self, buckets, modes)
    self%buckets_ = buckets
    self%modes_ = modes
    allocate(self%data_(buckets))
-   allocate(self%bucketstatus_(buckets))
    do i=1, self%buckets_
       allocate(self%data_(i)%p)
       self%data_(i)%p%next => null()
-      self%bucketstatus_(i) = 0
    end do
 end subroutine init
 
@@ -63,11 +58,6 @@ subroutine free(self)
       deallocate(self%data_)
    end if
 
-   if (allocated(self%bucketstatus_)) then
-      ! print *, ""
-      ! print *, "Bucket fill status", self%bucketstatus_
-      deallocate(self%bucketstatus_)
-   end if
 end subroutine free
 
 
@@ -102,7 +92,6 @@ subroutine add(self, k, ind)
 
    hash = self%hash(k)
    call self%data_(hash)%p%add(k, ind)
-   self%bucketstatus_(hash) = self%bucketstatus_(hash) + 1
 end subroutine add
 
 
