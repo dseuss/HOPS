@@ -1,3 +1,27 @@
+! Functions and classes related to generating colored noise
+!
+! ExponentialNoiseGenerator contains a generator for noise with correlation
+! function
+!
+!          alpha(t) = sum_j  g_j * exp(-gamma_j * |t| - ii * Omega_j * t).
+!
+! In order to obtain good results, two conditions have to be met:
+!     - alpha(0) should be real, otherwise the resulting correlation function
+!     is distorted around t=0 with larger real part and zero imaginary part
+!     - the propagation time should be enough for alpha to be decayed to
+!     approximately zero.
+!
+! Usage:
+!     type(ExponentialNoiseGenerator) :: ng
+!     complex                         :: Z(tSteps)
+!
+!     call ng%init(dt, tSteps, g, gamma, Omega)
+!     Z = ng%get_realization()
+!     call ng%free()
+!
+! The Noise Generator is based on the Fourier-Filter algorithm described in
+! details in Garcia-Ojalvo, Sancho: Noise in Spacially Extended Systems.
+
 module noisegen
 use system
 use, intrinsic :: iso_c_binding
@@ -8,9 +32,12 @@ real(dp), parameter :: twopi = 8._dp * atan(1._dp)
 
 type, public :: ExponentialNoiseGenerator
    integer :: N_
+   ! Square root of the spectral density
    complex(C_DOUBLE_COMPLEX), allocatable :: sqrtJ_(:)
+   ! Spaces allocated for the Fourier Transform routines
    complex(C_DOUBLE_COMPLEX), allocatable :: Z_(:)
 
+   ! FFTW3 plans
    type(C_PTR) :: Zt_to_w_
    type(C_PTR) :: Zw_to_t_
 
@@ -26,6 +53,14 @@ public init_random_seed
 contains
 
 subroutine init(self, dt, tSteps, g, gamma, Omega)
+   ! :dt: Time step size
+   ! :tSteps: Number of time steps
+   ! :g[*]: Coupling strenghts in bcf
+   ! :gamma[*]: Dampings in bcf
+   ! :Omega[*]: Center frequencies in bcf
+   !
+   ! Note: g, gamma, Omega should be of same size.
+
    implicit none
    class(ExponentialNoiseGenerator) :: self
    real(dp), intent(in)             :: dt
@@ -38,9 +73,12 @@ subroutine init(self, dt, tSteps, g, gamma, Omega)
    type(C_PTR) :: plan
    integer :: t
 
-   ! TODO Check that g, gamma, Omega are of same size
+   if (size(g) /= size(gamma) .or. (size(g) /= size(Omega))) then
+      print *, "ERROR in ExponentialNoiseGenerator.init: Arrays do not match"
+   endif
 
    self%N_ = tSteps
+   ! Setup the Fourier-transformation plans used in noise creation
    ! FIXME Is this simd-valid?
    allocate(self%Z_(2*tSteps), self%sqrtJ_(2*tSteps))
    self%Zt_to_w_ = fftw_plan_dft_1d(2*tSteps, self%Z_, self%Z_, FFTW_FORWARD, &
@@ -48,6 +86,7 @@ subroutine init(self, dt, tSteps, g, gamma, Omega)
    self%Zw_to_t_ = fftw_plan_dft_1d(2*tSteps, self%Z_, self%Z_, FFTW_BACKWARD, &
          FFTW_ESTIMATE)
 
+   ! Calculate the spectral density by Inverse Fourier transforming bcf
    ! FIXME Can we do that directly without alpha?
    do t = -tSteps, tSteps - 1
       a = sum(g * exp((-gamma - ii * Omega) * abs(t * dt)))
@@ -63,6 +102,7 @@ subroutine init(self, dt, tSteps, g, gamma, Omega)
    call fftw_execute_dft(plan, alpha, self%sqrtJ_)
    call fftw_destroy_plan(plan)
 
+   ! We actually need square root of spectral density (properly normalized)
    self%sqrtJ_ = sqrt(self%sqrtJ_) / (2*tSteps)
 end subroutine init
 
@@ -70,7 +110,6 @@ end subroutine init
 subroutine free(self)
    implicit none
    class(ExponentialNoiseGenerator) :: self
-   ! FIXME INSERT
    call array_free(self%Z_)
    call array_free(self%sqrtJ_)
    call fftw_destroy_plan(self%Zt_to_w_)
@@ -79,14 +118,21 @@ end subroutine free
 
 
 function get_realization(self) result(Z)
+   ! Create a realization of the random process, call after initialization
+   !
+   ! :result[tSteps]: Realization of the noise process
+
    implicit none
    class(ExponentialNoiseGenerator) :: self
    complex(dp)                      :: Z(self%N_)
 
    call white_noise_fill(self%Z_)
+   ! Calculate power spectrum of white noise
    call fftw_execute_dft(self%Zt_to_w_, self%Z_, self%Z_)
+   ! Multiply in freq. domain = folding of white noise with sqrtJ in time domain
    self%Z_ = self%Z_ * self%sqrtJ_
    call fftw_execute_dft(self%Zw_to_t_, self%Z_, self%Z_)
+
    Z = self%Z_(1:self%N_)
 end function get_realization
 
@@ -95,6 +141,15 @@ end function get_realization
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine white_noise_fill(Z)
+   ! Fill the array Z with "discrete white noise", i.e. indepent, complex
+   ! Gaussian random variables with unit covariance in each component using the
+   ! Box-Mueller algorithm.
+   !
+   ! :Z[*]: Array to be filled
+   !
+   ! Note: We don't write this as function, since space for Z is already
+   ! allocated during initialization.
+
    implicit none
    complex(dp), intent(out) :: Z(:)
 
@@ -111,9 +166,11 @@ end subroutine white_noise_fill
 
 
 subroutine init_random_seed()
+   ! Sets the random seed of the machine in a very "random" fashion in order
+   ! to yield indepent results even in multicore calculations on the same
+   ! machine.
+   !
    ! Stolen from  http://gcc.gnu.org/onlinedocs/gfortran/RANDOM_005fSEED.html
-   ! Should be fine to use with openmpi
-   ! Initializes the Random Seed independently on different machines
 
 #ifdef __INTEL_COMPILER
    use ifport
