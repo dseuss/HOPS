@@ -1,11 +1,30 @@
+! Generic template for dynamical arrays of type DTYPE. The explicit types are
+! created in dynarray.F90. Always pre-allocates chunk_ new elements to reduce
+! overhead in resizing.
+!
+! :TYPENAME: Name of the newly created type (dynamical array with entries of
+!            type DTYPE)
+! :DTYPE: Type of the entries of the array
+! :PADVAL: Default value of the entries
+!
+! Usage:
+!   type(IntDynamicArray) :: A
+!   call A%init(chunk_size)
+!   call A%add(5)
+!   call A%get(1)   ! == 5
+!
+! Direct access to the underlying allocatable array via A%data.
+
+
 private
 
 type, public :: TYPENAME
+
    private
-   integer :: size_
-   integer :: pos_
-   integer :: chunk_
-   DTYPE, allocatable, public :: data(:)
+   integer :: size_                                ! Currently allocated size
+   integer :: pos_                                 ! Number of elements
+   integer :: chunk_                               ! Chunk size for resizing
+   DTYPE, allocatable, public :: data(:)           ! the real data
 
    contains
    private
@@ -20,6 +39,8 @@ end type TYPENAME
 contains
 
 subroutine init(self, chunk)
+   ! :chunk: Number of pre-allocated elements in each resizing
+
    implicit none
    class(TYPENAME) :: self
    integer, intent(in) :: chunk
@@ -39,11 +60,16 @@ end subroutine free
 
 
 subroutine add(self, x)
+   ! Adds one element to the dynamical array at the end.
+   !
+   ! :x: Element to add
+
    implicit none
    class(TYPENAME)   :: self
    DTYPE, intent(in) :: x
    DTYPE, allocatable :: tmp(:)
 
+   ! Do we need resizing?
    if (self%size_ <= self%pos_) then
       allocate(tmp(self%size_ + self%chunk_))
       tmp(1:self%size_) = self%data
@@ -57,6 +83,11 @@ end subroutine add
 
 
 function get(self, N) result(x)
+   ! Returns the element at the Nth place, raise an error if N is out of bounds
+   !
+   ! :N: Index to retrieve element from
+   ! :result: Element at the Nth position
+
    implicit none
    class(TYPENAME), intent(in) :: self
    integer, intent(in)         :: N
@@ -71,6 +102,10 @@ function get(self, N) result(x)
 end function get
 
 elemental function size(self) result(N)
+   ! Return the size of the array (currently used, not the pre-allocated size)
+   !
+   ! :result: Number of elements currently in the array
+
    implicit none
    class(TYPENAME), intent(in) :: self
    integer                     :: N
