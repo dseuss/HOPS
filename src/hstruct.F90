@@ -250,13 +250,13 @@ elemental function indab(self, n, mode)
    if ((mode < 0) .or. (mode > self%modes_)) then
       print *, 'ERROR in indab: mode out of bounds. Is', mode, &
             ', number of modes', self%modes_
-      call Stop(-1)
+      stop -1
    end if
 
    if ((n < 0) .or. (n > self%entries_)) then
       print *, 'ERROR in indab: entry out of bounds. Is', n, &
             ', number of entries', self%entries_
-      call Stop(-1)
+      stop -1
    end if
 #endif
 
@@ -280,18 +280,18 @@ elemental function indbl(self, n, mode)
    class(HStructure), intent(in) :: self
    integer, intent(in)           :: n
    integer, intent(in)           :: mode
-   integer                       :: indab
+   integer                       :: indbl
 #ifdef NDEBUG
    if ((mode < 0) .or. (mode > self%modes_)) then
       print *, 'ERROR in indbl: mode out of bounds. Is', mode, &
             ', number of modes', self%modes_
-      call Stop(-1)
+      stop -1
    end if
 
    if ((n < 0) .or. (n > self%entries_)) then
       print *, 'ERROR in indbl: entry out of bounds. Is', n, &
             ', number of entries', self%entries_
-      call Stop(-1)
+      stop -1
    end if
 #endif
 
@@ -316,7 +316,7 @@ pure function vecind(self, n)
    if ((n < 0) .or. (n > self%entries_)) then
       print *, 'ERROR in vecind: entry out of bounds. Is', n, &
             ', number of entries', self%entries_
-      call Stop(-1)
+      stop -1
    end if
 #endif
 
