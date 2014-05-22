@@ -2,29 +2,49 @@
 ! by the set of all valid vector indices combined with an enumeration of the
 ! latter.
 !
-! The valid entries are determined by the truncation condition.
+! A hierarchy structure is characterized by the number of modes N (the dimension
+! of the vector index (k)) and the truncation condition. Currently, there are
+! three different criteria, which determine valid (k):
+!
+!     - depth D of the hierarchy (triangular truncation): (k) is a valid vector
+!     index of the hierarchy, iff
+!                             k_1 + ... + k_N <= D
+!
+!     - populated modes P: (k) is a valid vector index of the hierarchy, iff
+!     at most P components of (k) are non-zero.
+!     Example: P=2, N=3, D=4: valid [0,0,0], [4,0,0], [3,1,0]
+!                         not valid: [1,1,1] (3 non-zero components)
+!
+!     - manual cutoff (c): (k) is a valid vector index of the hierarchy, iff
+!               for all i=1,...,N:   k_i <= c_i
+!
+! FIXME vecind_ should be column-major order!
+
 module hstruct
 use system
 use hstructtab, only: HStructureTable
 implicit none
 private
 
+! Average number of entries in each linked list in the hash table
+!     => number of buckets for hash table is given by int(entries / BUCKETFILL)
 integer, parameter :: BUCKETFILL = 10
 
 type, public :: HStructure
    private
    integer :: &
-         entries_, &
-         modes_, &
-         depth_, &
-         populated_modes_
+         entries_, &                   ! Number of total entries in hierarchy
+         modes_, &                     ! Number of modes = length(k)
+         depth_, &                     ! Depth of the hierarchy
+         populated_modes_              ! Max. number of populated modes
 
-   type(HStructureTable) :: intind_
+   type(HStructureTable) :: intind_    ! Hash-table to lookup integer-index
    integer, allocatable :: &
-         cutoff_(:), &
-         vecind_(:, :), &
-         indab_(:, :), &
-         indbl_(:, :)
+         cutoff_(:), &                 ! Manual cutoff vector
+         vecind_(:, :), &              ! vecind_(i, :) = i-th vector index
+         indab_(:, :), &               ! indab_(i, j) = integer-index of
+                                       ! (k) + (e_j), where (k) = vecind_(i, :)
+         indbl_(:, :)                  ! Same as indab_, but with "- (e_j)"
 
    contains
    private
@@ -44,6 +64,16 @@ end type HStructure
 contains
 
 recursive subroutine recursive_indices_(self, at_mode, indices, currpop)
+   ! Recursively calculate all valid vector indices. To start call as
+   !
+   !     call self%recursive_indices_(1, [0,0,...,0], 0)
+   !
+   !  Fills in the member variables of self.
+   !
+   ! :at_mode: Fill in all valid combinations for "at_mode"-th component of (k)
+   ! :indices[self%modes_]: Components indices_i with i < at_mode are filled in
+   ! :currpop: Number of currently populated states
+
    implicit none
 
    class(HStructure)      :: self
@@ -53,9 +83,12 @@ recursive subroutine recursive_indices_(self, at_mode, indices, currpop)
 
    integer i, indices_inc(self%modes_), at_mode_inc, currpop_inc
 
-   ! first we treat the at_mode - unpopulated case
+   ! First we treat the at_mode-th component with no population
+   !     -> this contributes irrespective of currpop
+   ! Have we reached the last mode? -> Fill in!
    if (at_mode >= self%modes_) then
       call self%add_entry_(indices)
+   ! no? go to next mode and call with same indices (as these are 0 by default)
    else
       at_mode_inc = at_mode + 1
       call self%recursive_indices_(at_mode_inc, indices, currpop)
@@ -67,8 +100,10 @@ recursive subroutine recursive_indices_(self, at_mode, indices, currpop)
 
    indices_inc = indices
    currpop_inc = currpop + 1
+   ! Fill in at_mode-th mode with all valid components
    do i = 1, self%depth_ - sum(indices)
       indices_inc(at_mode) = i
+
       if ((at_mode >= self%modes_)) then
          call self%add_entry_(indices_inc)
       else
@@ -79,6 +114,10 @@ end subroutine recursive_indices_
 
 
 subroutine add_entry_(self, k)
+   ! Adds the vector index k unless the manual cutoff prevents it
+   !
+   ! :k[self%modes_]: vector index to add
+
    implicit none
    class(HStructure) :: self
    integer, intent(in) :: k(self%modes_)
@@ -89,13 +128,19 @@ subroutine add_entry_(self, k)
    end if
 end subroutine add_entry_
 
+
 subroutine init(self, modes, depth, populated_modes, cutoff)
+   ! :modes: Number of modes in the hierarchy == length of the vector indices
+   ! :depth: Depth of the hierarchy for the triangular truncation condition
+   ! :populated_modes (modes): Max. number of modes with excitation
+   ! :cutoff[modes] ([depth,...,depth]): Manual cutoff condition
+
    implicit none
    class(HStructure)             :: self
    integer, intent(in)           :: modes
    integer, intent(in)           :: depth
    integer, intent(in), optional :: populated_modes
-   integer, intent(in), optional :: cutoff(:)
+   integer, intent(in), optional :: cutoff(modes)
 
    !----------------------------------------------------------------------------
    integer i, j, max_entries, k(modes), currpop
@@ -172,6 +217,11 @@ end subroutine free
 
 
 function find_index(self, k) result(i)
+   ! Look up the vector index k and return the corresponding integer index
+   !
+   ! :k[self%modes_]: Vector index to look up
+   ! :result: Integer index corresponding to k
+
    implicit none
    class(HStructure), intent(in) :: self
    integer                       :: i
@@ -179,39 +229,105 @@ function find_index(self, k) result(i)
    i = self%intind_%get(k)
 end function find_index
 
-
+#ifdef NDEBUG
+function indab(self, n, mode)
+#else
 elemental function indab(self, n, mode)
+#endif
+   ! Look up the integer index belonging to (k) + (e_mode), where
+   ! (k) = vecind_(n, :).
+   !
+   ! :n: Integer index of the "current" entry
+   ! :mode: Mode number where are coupling to (above)
+   ! :result: Integer index belonging to (k) + (e_mode)
+
    implicit none
    class(HStructure), intent(in) :: self
    integer, intent(in)           :: n
    integer, intent(in)           :: mode
    integer                       :: indab
-   ! FIXME Add some checks
+#ifdef NDEBUG
+   if ((mode < 0) .or. (mode > self%modes_)) then
+      print *, 'ERROR in indab: mode out of bounds. Is', mode, &
+            ', number of modes', self%modes_
+      call Stop(-1)
+   end if
+
+   if ((n < 0) .or. (n > self%entries_)) then
+      print *, 'ERROR in indab: entry out of bounds. Is', n, &
+            ', number of entries', self%entries_
+      call Stop(-1)
+   end if
+#endif
+
    indab = self%indab_(n, mode)
 end function indab
 
 
+#ifdef NDEBUG
+function indbl(self, n, mode)
+#else
 elemental function indbl(self, n, mode)
+#endif
+   ! Look up the integer index belonging to (k) - (e_mode), where
+   ! (k) = vecind_(n, :).
+   !
+   ! :n: Integer index of the "current" entry
+   ! :mode: Mode number where are coupling to (below)
+   ! :result: Integer index belonging to (k) - (e_mode)
+
    implicit none
    class(HStructure), intent(in) :: self
    integer, intent(in)           :: n
    integer, intent(in)           :: mode
-   integer                       :: indbl
-   ! FIXME Add some checks
+   integer                       :: indab
+#ifdef NDEBUG
+   if ((mode < 0) .or. (mode > self%modes_)) then
+      print *, 'ERROR in indbl: mode out of bounds. Is', mode, &
+            ', number of modes', self%modes_
+      call Stop(-1)
+   end if
+
+   if ((n < 0) .or. (n > self%entries_)) then
+      print *, 'ERROR in indbl: entry out of bounds. Is', n, &
+            ', number of entries', self%entries_
+      call Stop(-1)
+   end if
+#endif
+
    indbl = self%indbl_(n, mode)
 end function indbl
 
+
+#ifdef NDEBUG
+function vecind(self, n)
+#else
 pure function vecind(self, n)
+#endif
+   ! Returns the vector index corresponding to the integer index n
+   !
+   ! :n: Integer index
+   ! :result[self%modes_]: Vector index corresponding to n
    implicit none
    class(HStructure), intent(in) :: self
    integer, intent(in)           :: n
    integer                       :: vecind(self%modes_)
-   ! FIXME Add some checks
+#ifdef NDEBUG
+   if ((n < 0) .or. (n > self%entries_)) then
+      print *, 'ERROR in vecind: entry out of bounds. Is', n, &
+            ', number of entries', self%entries_
+      call Stop(-1)
+   end if
+#endif
+
    vecind = self%vecind_(n, :)
 end function vecind
 
 
 elemental function entries(self)
+   ! Getter function for the member variable self%entries_
+   !
+   ! :returns: The number of entries in the hierarchy
    implicit none
    class(HStructure), intent(in) :: self
    integer                       :: entries
@@ -220,6 +336,8 @@ end function entries
 
 
 subroutine print(self)
+   ! Prints the hierarchy structure on screen, just for debugging...
+
    implicit none
    class(HStructure) :: self
    integer :: ind
@@ -239,6 +357,11 @@ end subroutine print
 pure function choose(n, k) result (res)
    ! Returns the binomial coefficient (n over k) by calculating Pascals
    ! triangle.
+   !
+   ! :n:
+   ! :k:
+   ! :result: (n over k)
+
    implicit none
    integer, intent (in) :: n, k
    integer              :: res
