@@ -1,7 +1,34 @@
+! Module for time-dependent sparse matrices. Instead of knowing the values of
+! the matrix during its preparation, we only know "indices", which are used
+! as a placeholder. Later, we can determine (and update) the value of the
+! (i,j)-th component of the matrix by passing in an array of values.
+!
+! Usage:
+!
+! such as building the sparse matrix and matrix-vector multiplication
+! (sparse-dense) for complex quadratic sparse matrices.
+!
+! Usage:
+!     type(SparseMatrix) :: A
+!     complex(dp) :: x(2), y(2)
+!
+!     call A%init(2, 1)
+!     call A%add(1, 1, 0.5)
+!     call A%finalize()
+!
+!     x = [1, 0]
+!     call A%multiply(x, y)   ! y = Ax
+!
+! Currently supported backends:
+!     - Intel MKL
+!
+! WARNING: Module may not function properly with pre 11.1 MKL
+!          (see http://software.intel.com/en-us/forums/topic/375484).
+!
 ! TODO Make another one not based on MKL with direct multiplication (instead
 ! of resetting data.
 
-module randomsparse
+module timedep_sparse
 use system
 use dynarray_int
 use dynarray_cmplx
@@ -9,7 +36,7 @@ use dynarray_cmplx
 implicit none
 private
 
-type, public :: RandomSparseMatrix
+type, public :: TimeDepSparseMatrix
    integer :: size_
    integer :: num_proc_
    integer :: nnz_
@@ -32,13 +59,13 @@ type, public :: RandomSparseMatrix
    procedure, public :: finalize
    procedure, public :: multiply
    procedure, public :: add
-end type RandomSparseMatrix
+end type TimeDepSparseMatrix
 
 contains
 
 subroutine init(self, size, num_proc, chunk)
    implicit none
-   class(RandomSparseMatrix)           :: self
+   class(TimeDepSparseMatrix)           :: self
    integer, intent(in)           :: size
    integer, intent(in)           :: num_proc
    integer, intent(in), optional :: chunk
@@ -63,7 +90,7 @@ end subroutine init
 
 subroutine free(self)
    implicit none
-   class(RandomSparseMatrix) :: self
+   class(TimeDepSparseMatrix) :: self
 
    call self%cooI_%free()
    call self%cooJ_%free()
@@ -78,22 +105,22 @@ end subroutine free
 
 subroutine add(self, i, j, id, coeff)
    implicit none
-   class(RandomSparseMatrix)               :: self
+   class(TimeDepSparseMatrix)               :: self
    integer, intent(in)               :: i
    integer, intent(in)               :: j
    integer, intent(in)               :: id
    complex(dp), intent(in), optional :: coeff
 
    if ((i < 1) .or. (i > self%size_)) then
-      print *, "OUT OF BOUND ERROR: Adding i to RandomSparseMatrix failed"
+      print *, "OUT OF BOUND ERROR: Adding i to TimeDepSparseMatrix failed"
       print *, "0 < ", i, " < ", self%size_
    end if
    if ((j < 1) .or. (j > self%size_)) then
-      print *, "OUT OF BOUND ERROR: Adding j to RandomSparseMatrix failed"
+      print *, "OUT OF BOUND ERROR: Adding j to TimeDepSparseMatrix failed"
       print *, "0 < ", j, " < ", self%size_
    end if
    if ((id < 1) .or. (id > self%num_proc_)) then
-      print *, "OUT OF BOUND ERROR: Wrong process id in RandomSparseMatrix"
+      print *, "OUT OF BOUND ERROR: Wrong process id in TimeDepSparseMatrix"
       print *, "0 < ", id, " < ", self%num_proc_
    end if
 
@@ -111,7 +138,7 @@ end subroutine add
 
 subroutine finalize(self)
    implicit none
-   class(RandomSparseMatrix) :: self
+   class(TimeDepSparseMatrix) :: self
 
    integer :: job(8), info, i, j, N
    ! TODO Remove duplicates by adding them together
@@ -140,7 +167,7 @@ end subroutine finalize
 ! TODO Check if its not better to pre-allocate multiplier
 subroutine multiply(self, Z, x, y, alpha)
    implicit none
-   class(RandomSparseMatrix), intent(in)   :: self
+   class(TimeDepSparseMatrix), intent(in)   :: self
    complex(dp), intent(in)           :: Z(self%num_proc_)
    complex(dp), intent(in)           :: x(self%size_)
    complex(dp), intent(out)          :: y(self%size_)
@@ -158,4 +185,4 @@ subroutine multiply(self, Z, x, y, alpha)
    end if
 end subroutine multiply
 
-end module randomsparse
+end module timedep_sparse

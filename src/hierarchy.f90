@@ -3,7 +3,7 @@ use system
 use hstruct, only: HStructure
 use hstructtab, only: INVALID_INDEX
 use sparse, only: SparseMatrix
-use randomsparse, only: RandomSparseMatrix
+use timedep_sparse, only: TimeDepSparseMatrix
 use noisegen, only: ExponentialNoiseGenerator, init_random_seed
 implicit none
 private
@@ -41,8 +41,8 @@ real(dp) :: &
       dt_
 
 type(SparseMatrix) :: linProp_
-type(RandomSparseMatrix) :: noiseProp_
-type(RandomSparseMatrix) :: nonlinProp_
+type(TimeDepSparseMatrix) :: noiseProp_
+type(TimeDepSparseMatrix) :: nonlinProp_
 
 type(ExponentialNoiseGenerator), allocatable :: noisegen_(:)
 
@@ -93,20 +93,7 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    call setup_propagator_simple(struct, with_terminator)
    call setup_noiseprop_simple(struct, with_terminator)
    call setup_nonlinprop_simple(struct, with_terminator)
-
    call init_random_seed()
-
-   !----------------------------------------------------------------------------
-   !TODO Make this optional
-   ! call struct%print()
-   ! call linProp_%print()
-
-   ! print *, "Hsys= ", h
-   ! print *, "g=", g
-   ! print *, "gamma=", gamma
-   ! print *, "Omega=", Omega
-   ! print *, "Lmap=", Lmap
-   !----------------------------------------------------------------------------
 
    call struct%free()
 end subroutine init
@@ -313,7 +300,6 @@ subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
          dot_product(hierarchy(1:dim_, RK_NEW), hierarchy(1:dim_, RK_NEW))
 
    Z_cp = conjg(Zt)
-   ! Z_cp = (Zt)
    do i = 1, modes_
       Z_cp(Lmap_(i)) = Z_cp(Lmap_(i)) + memTerms(i, RK_NEW)
    end do

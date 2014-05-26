@@ -5,7 +5,7 @@ use hstruct_test
 use noisegen_test
 use dynarray_test
 use sparse_test
-use randomsparse_test
+use timedep_sparse_test
 
 implicit none
 
@@ -30,7 +30,7 @@ call test_dynarray_reshape
 ! SparseMatrix test suite
 call test_sparse_matmul
 call test_sparse_setblock
-call test_randomsparse_resetval
+call test_timedep_sparse_resetval
 
 call fruit_summary
 
