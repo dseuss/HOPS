@@ -2,8 +2,7 @@
 # FORTRANFLAGS = ['-g','-DNDEBUG']
 # LINKFLAGS = '-g'
 # CC = 'gcc'
-
+# MKLROOT=/usr/local/intel/composerxe/2013.sp1.1.106/composer_xe_2013_sp1.1.106/mkl
 ## Use Intel MKL link line advisor https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
 # MKLFLAGS = '-I$MKLROOT/include'
 # MKLLD = '-Wl,--start-group $MKLROOT/lib/intel64/libmkl_intel_lp64.a $MKLROOT/lib/intel64/libmkl_core.a $MKLROOT/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm'
-# MKLROOT=/usr/local/intel/composerxe/2013.sp1.1.106/composer_xe_2013_sp1.1.106/mkl

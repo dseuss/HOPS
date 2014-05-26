@@ -28,7 +28,9 @@ opts = Variables(SCONS_CONFIG_FILE)
 
 # Set all options + default values
 opts.AddVariables(('FORTRAN', 'Fortran compiler to use', None),
+                  ('FORTRANFLAGS', 'Flags for the Fortran compiler', None),
                   ('CC', 'C compiler to use', None),
+                  ('LINKFLAGS', 'Flags for the linker', None),
                   ('MKLROOT', 'Intel MKL Root Directory', None),
                   ('MKLLD', 'Explicit link line for MKL', None),
                   ('MKLFLAGS', 'Explicit compile options for MKL', None),
@@ -186,4 +188,4 @@ runtest = env.Program('runtest', objs + testobjs)
 libhierarchy = env.SharedLibrary('libhierarchy.so', ['src/libhierarchy.pyx'] + objs)
 libnoise = env.SharedLibrary('libnoise.so', ['src/libnoise.pyx'] + objs)
 main = env.Program('main', objs + ['src/main.f90'])
-Default(libhierarchy)
+Default(runtest)
