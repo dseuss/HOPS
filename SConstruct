@@ -28,12 +28,20 @@ opts = Variables(SCONS_CONFIG_FILE)
 
 # Set all options + default values
 opts.AddVariables(('FORTRAN', 'Fortran compiler to use', None),
-                  ('FORTRANFLAGS', 'Flags for the Fortran compiler', None),
+                  ('FORTRANFLAGS', 'Flags for the Fortran compiler', ['-fPIC']),
+                  ('FORTRANPATH', 'Include directories for the Fortran preprocesser', ['/usr/include']),
+
                   ('CC', 'C compiler to use', None),
+                  ('CFLAGS', 'Flags for the C compiler', ['-pthread', '-Wstrict-prototypes', '-fPIC']),
+                  ('CPPPATH', 'Include directories for the C preprocesser', ['/usr/include/python2.7']),
+
                   ('LINKFLAGS', 'Flags for the linker', None),
+                  ('LIBPATH', 'Search directories for libraries', None),
+
                   ('MKLROOT', 'Intel MKL Root Directory', None),
                   ('MKLLD', 'Explicit link line for MKL', None),
                   ('MKLFLAGS', 'Explicit compile options for MKL', None),
+
                   ('ARCH', 'Target architecture', architecture()[0]),
                   )
 
@@ -148,13 +156,6 @@ def ConfigureMKL(conf):
 
 if not any((env.GetOption(arg) for arg in ('clean', 'help'))):
     ## TODO Make this more configurable (put in config file)
-    env.Append(CCFLAGS='-pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes -fPIC'.split(),
-               CPPPATH=['/usr/include/python2.7',
-                        '/usr/local/lib64/python2.7/site-packages/numpy/core/include',
-                        '/usr/lib/python2.7/dist-packages/numpy/core/include/'],
-               FORTRANPATH=['/usr/include'],
-               LIBPATH=['/usr/lib/x86_64-linux-gnu/'],
-               FORTRANFLAGS=['-fPIC'])
 
     cyscons.generate(env)
 
