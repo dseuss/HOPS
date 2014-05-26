@@ -8,3 +8,7 @@ runtest
 main
 *.h5
 data
+.sconf_temp
+config.log
+bin/
+scons.conf
