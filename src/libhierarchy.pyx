@@ -15,7 +15,7 @@ cdef extern:
                double complex *h, int *Lmap, bint *with_terminator,
                int *populated_modes)
     void c_run_trajectory_rk4(int *hs_dim, int *tSteps, complex *psi0,
-                             double complex *psi)
+                             double complex *psi, bint *normalized)
     void c_run_trajectory_z0_rk4(int *hs_dim, int *tSteps, complex *psi0,
                                 double complex *psi)
     void c_run_trajectory_z0_zvode(int *hs_dim, int *tSteps, complex *psi0,
@@ -112,13 +112,14 @@ cdef class _HierarchyIntegrator(object):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def run_trajectory(self, psi0):
+    def run_trajectory(self, psi0, bint normalized=0):
         """ Calculates a normalizable quantum trajectory.
         Initialize the integrator first using update(). The solutions are not
         normalized, but allow for a normalization when taking the average
         (non-normalized, but Girsanov-shifted trajectories).
 
         :psi0[dim]: Initial state
+        :normalized(False): Return normalized trajectory
         :returns: psi[tSteps, dim], quantum trajectory
 
         """
@@ -127,7 +128,8 @@ cdef class _HierarchyIntegrator(object):
         cdef np.ndarray[double complex, mode='fortran', ndim=2] psi = \
                 np.empty([self._tSteps, self._dim], dtype=np.complex128,
                          order='F')
-        c_run_trajectory_rk4(&self._dim, &self._tSteps, &psi0c[0], &psi[0, 0])
+        c_run_trajectory_rk4(&self._dim, &self._tSteps, &psi0c[0], &psi[0, 0],
+                             &normalized)
         return psi
 
     @cython.boundscheck(False)

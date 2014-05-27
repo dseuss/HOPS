@@ -30,13 +30,15 @@ subroutine c_free() bind(c)
 end subroutine c_free
 
 
-subroutine c_run_trajectory_rk4(hs_dim, tSteps, psi0, psi) bind(c)
+subroutine c_run_trajectory_rk4(hs_dim, tSteps, psi0, psi, normalized) bind(c)
    implicit none
-   integer(c_int), intent(in) :: hs_dim
-   integer(c_int), intent(in) :: tSteps
-   complex(c_double_complex), intent(in) :: psi0(hs_dim)
+   integer(c_int), intent(in)             :: hs_dim
+   integer(c_int), intent(in)             :: tSteps
+   complex(c_double_complex), intent(in)  :: psi0(hs_dim)
    complex(c_double_complex), intent(out) :: psi(tSteps, hs_dim)
-   psi = run_trajectory_rk4(psi0)
+   logical(c_bool), intent(in)            :: normalized
+
+   psi = run_trajectory_rk4(psi0, logical(normalized))
 end subroutine c_run_trajectory_rk4
 
 

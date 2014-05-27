@@ -79,6 +79,11 @@ integer, parameter :: &
       RK_4 = 6, &
       RK_BUF = 7           ! Copy not really necessary for Runge Kutta
 
+! Parameter to access first-order array
+integer, parameter :: &
+      ILMAP = 1, &
+      IIND = 2
+
 integer :: &
       depth_, &            ! Depth of the hierarchy
       modes_, &            ! Total number of exponential modes
@@ -87,7 +92,9 @@ integer :: &
 integer, public :: &
       size_                ! Size of the full state (= dim_ * nr_of_aux_states)
 integer, allocatable :: &
-      Lmap_(:)             ! Mapping between exp. modes and coupling operators
+      Lmap_(:), &          ! Mapping between exp. modes and coupling operators
+      FirstOrders_(:, :)   ! FirstOrders(j, :) = (Lmap_(j), IntIndex(j)) if
+                           ! (k) = (e_j) is a valid hierarchy order
 complex(dp), allocatable :: &
       g_(:), &             ! Coupling strengths of the exp. modes
       h_(:, :)             ! System's free Hamiltionian
@@ -146,7 +153,6 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
 
    type(HStructure) :: struct
 
-   ! TODO Error checks
    tLength_ = tLength
    tSteps_ = tSteps
    dt_ = tLength / (tSteps_ - 1)
@@ -168,6 +174,7 @@ subroutine init(tLength, tSteps, depth, g, gamma, Omega, h, Lmap, &
    call setup_propagator_(struct, with_terminator)
    call setup_noiseprop_(struct, with_terminator)
    call setup_nonlinprop_(struct, with_terminator)
+   call setup_first_orders_(struct)
 
    call struct%free()
 end subroutine init
@@ -189,6 +196,7 @@ subroutine free()
    call array_free(gamma_)
    call array_free(Omega_)
    call array_free(Lmap_)
+   call array_free(FirstOrders_)
 
    if (allocated(noisegen_)) then
       deallocate(noisegen_)
@@ -381,10 +389,39 @@ subroutine setup_nonlinprop_(struct, with_terminator)
 end subroutine setup_nonlinprop_
 
 
+subroutine setup_first_orders_(struct)
+   ! Sets up the FirstOrder array, such that all first orders (e_j) (which are
+   ! valid hierarchy orders) are included.
+   !
+   !     FirstOrders(j) = (Lmap(j), Integer-Index(e_j))
+   !
+   ! :struct: Hierarchy structure
+   !
+   ! TODO This just crops if (e_j) is not valid, use terminator instead.
+
+   implicit none
+   type(HStructure) :: struct
+
+   integer :: FirstOrders(modes_, 2), k(modes_), counter, i
+
+   counter = 0
+   do i = 1, modes_
+      if (struct%indab(1, i) /= INVALID_INDEX) then
+         counter = counter + 1
+         FirstOrders(counter, ILMAP) = Lmap_(i)
+         FirstOrders(counter, IIND) = struct%indab(1, i)
+      end if
+   end do
+
+   allocate(FirstOrders_(counter, 2))
+   FirstOrders_(:, :) = FirstOrders(1:counter, :)
+end subroutine setup_first_orders_
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 !  Transfer Calculation  !
 !!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
+subroutine trajectory_step_rk4_(dt, hierarchy, memTerms, Zt, rk_step, normal)
    ! Calculate one integration step of the nonlinear equation (b) of size dt.
    !
    ! :dt: Time step
@@ -394,8 +431,7 @@ subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
    ! :Zt[dim_]: Noise process realizations at current time step
    ! :rk_step: Fill which copy of the hierarchy, possible values: RK_1,...,RK_4
    !
-   ! TODO Make this more compliant with usual integrator-rules
-   ! FIXME Can we get rid of RK_BUF?
+   ! FIXME Can we get rid of RK_BUF
 
    implicit none
    real(dp), intent(in)       :: dt
@@ -403,10 +439,12 @@ subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
    complex(dp), intent(inout) :: memTerms(modes_, RK_COPIES)
    complex(dp), intent(in)    :: Zt(dim_)
    integer, intent(in)        :: rk_step
+   logical, intent(in)        :: normal
 
    complex(dp) :: Z_cp(dim_)
    complex(dp) :: ExpL(dim_)
-   integer :: i
+   complex(dp) :: A
+   integer :: i, m, lmap
 
    ExpL = Abs(hierarchy(1:dim_, RK_NEW))**2 / &
          dot_product(hierarchy(1:dim_, RK_NEW), hierarchy(1:dim_, RK_NEW))
@@ -426,11 +464,26 @@ subroutine trajectory_step_rk4(dt, hierarchy, memTerms, Zt, rk_step)
          hierarchy(:, RK_BUF))
    hierarchy(:, rk_step) = hierarchy(:, rk_step) +  hierarchy(:, RK_BUF)
    call nonlinprop_%multiply(expl, hierarchy(:, rk_new), hierarchy(:, RK_BUF))
-   hierarchy(:, rk_step) = dt_ * (hierarchy(:, rk_step) + hierarchy(:, RK_BUF))
-end subroutine trajectory_step_rk4
+   hierarchy(:, rk_step) = hierarchy(:, rk_step) + hierarchy(:, RK_BUF)
+
+   ! Norm-correction terms
+   if (normal) then
+      A = sum(ExpL * Z_cp)
+      do i = 1, size(FirstOrders_(:, 1))
+         m = (FirstOrders_(i, IIND) - 1) * dim_
+         lmap = FirstOrders_(i, ILMAP)
+         A = A + ExpL(lmap) * &
+               dot_product(hierarchy(1:dim_,RK_NEW), hierarchy(m+1:m+dim_,RK_NEW))
+         A = A + conjg(hierarchy(lmap, RK_NEW)) * hierarchy(m+lmap, RK_NEW)
+      end do
+      hierarchy(:, rk_step) = hierarchy(:, rk_step) - real(A) * hierarchy(:, RK_NEW)
+   end if
+
+   hierarchy(:, rk_step) = dt * hierarchy(:, rk_step)
+end subroutine trajectory_step_rk4_
 
 
-function run_trajectory_rk4(psi0) result(psi)
+function run_trajectory_rk4(psi0, normalize) result(psi)
    ! Calculates  a single (normalizable, but not normalized) trajectory.
    ! Remember to initialize module first using init.
    !
@@ -439,7 +492,8 @@ function run_trajectory_rk4(psi0) result(psi)
 
    implicit none
    complex(dp), intent(in) :: psi0(dim_)
-   complex(dp) :: psi(tSteps_, dim_)
+   logical, intent(in)     :: normalize
+   complex(dp)             :: psi(tSteps_, dim_)
 
    complex(dp) :: hierarchy(size_, RK_COPIES), Z(dim_, 2*tSteps_)
    complex(dp) :: memTerms(modes_, RK_COPIES)
@@ -457,19 +511,23 @@ function run_trajectory_rk4(psi0) result(psi)
    do t = 2, tSteps_
       hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD)
       memTerms(:, RK_NEW) = memTerms(:, RK_OLD)
-      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-3), RK_1)
+      call trajectory_step_rk4_(dt_, hierarchy, memTerms, Z(:, 2*t-3), RK_1, &
+            normalize)
 
       hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + .5*hierarchy(:, RK_1)
       memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + .5*memTerms(:, RK_1)
-      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_2)
+      call trajectory_step_rk4_(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_2, &
+            normalize)
 
       hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + .5*hierarchy(:, RK_2)
       memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + .5*memTerms(:, RK_2)
-      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_3)
+      call trajectory_step_rk4_(dt_, hierarchy, memTerms, Z(:, 2*t-2), RK_3, &
+            normalize)
 
       hierarchy(:, RK_NEW) = hierarchy(:, RK_OLD) + hierarchy(:, RK_3)
       memTerms(:, RK_NEW) = memTerms(:, RK_OLD) + memTerms(:, RK_3)
-      call trajectory_step_rk4(dt_, hierarchy, memTerms, Z(:, 2*t-1), RK_4)
+      call trajectory_step_rk4_(dt_, hierarchy, memTerms, Z(:, 2*t-1), RK_4, &
+            normalize)
 
       hierarchy(:, RK_OLD) = hierarchy(:, RK_OLD) &
             + 1./6. * hierarchy(:, RK_1) &
@@ -481,6 +539,12 @@ function run_trajectory_rk4(psi0) result(psi)
             + 2./6. * memTerms(:, RK_2) &
             + 2./6. * memTerms(:, RK_3) &
             + 1./6. * memTerms(:, RK_4)
+
+      ! TODO Check what we can do about manual normalization
+      ! if (normalize) then
+      !    hierarchy(:, RK_OLD) = hierarchy(:, RK_OLD) / &
+      !          sqrt(dot_product(hierarchy(1:dim_, RK_OLD), hierarchy(1:dim_, RK_OLD)))
+      ! end if
       psi(t, :) = hierarchy(1:dim_, RK_OLD)
    end do
 end function run_trajectory_rk4
