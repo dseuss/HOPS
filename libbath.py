@@ -47,6 +47,7 @@ class OscillatorBath(object):
             self._Omega = np.ravel(Omega)
             self._g = np.pi / (4 * self.gamma * self.Omega) * np.ravel(g)
         elif (T > 0.):
+
             poles, residues = fg.coth_poles_pade(ncoth)
             self._g, self._gamma, self._Omega = fg.spd2bcf(np.ravel(g),
                   np.ravel(gamma), np.ravel(Omega), T, poles, residues)
@@ -56,11 +57,11 @@ class OscillatorBath(object):
         if alpha is None:
             self._alpha = self.makeCorrelationFunction
         else:
-            self._alpha = alpha
+          self._alpha = alpha
 
     @property
-        def g(self):
-    return self._g
+    def g(self):
+        return self._g
 
     @property
     def gamma(self):
