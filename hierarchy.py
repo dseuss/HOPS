@@ -32,7 +32,8 @@ class Hierarchy(object):
 
     """Docstring for Hierarchy. """
 
-    def __init__(self, tLength, tSteps, hamiltonian, bath, depth, filename):
+    def __init__(self, tLength, tSteps, hamiltonian, bath, depth, filename,
+                 **kwargs):
         """Initialize Hierarchy
 
         :tLength:
@@ -62,7 +63,7 @@ class Hierarchy(object):
         # FIXME Switch on terminator
         fIntegrator.update(self._tLength, self._tSteps, self._depth,
                            g.flatten(), gamma.flatten(), Omega.flatten(),
-                           self._hamiltonian, Lmap.flatten())
+                           self._hamiltonian, Lmap.flatten(), **kwargs)
 
     def _set_attrs(self, ds):
         """@todo: Docstring for _set_attrs.
@@ -102,7 +103,7 @@ class SpectrumHierarchy(Hierarchy):
     """Docstring for SpectrumHierarchy. """
 
     def __init__(self, tLength, tSteps, hamiltonian, bath, depth,
-                 filename='spectra.h5'):
+                 filename='spectra.h5', **kwargs):
         """@todo: to be defined1.
 
         :tLength: @todo
@@ -114,7 +115,7 @@ class SpectrumHierarchy(Hierarchy):
 
         """
         Hierarchy.__init__(self, tLength, tSteps, hamiltonian, bath, depth,
-                           filename)
+                           filename, **kwargs)
         self._psi = None
 
     def calc_trajectory(self, psi0=None, label=None, integrator='rk4',
@@ -213,7 +214,7 @@ class TransferHierarchy(Hierarchy):
     """Docstring for TransferHierarchy. """
 
     def __init__(self, tLength, tSteps, hamiltonian, bath, depth,
-                 filename='transfer.h5'):
+                 filename='transfer.h5', **kwargs):
         """@todo: to be defined1.
 
         :tLength: @todo
@@ -225,7 +226,7 @@ class TransferHierarchy(Hierarchy):
 
         """
         Hierarchy.__init__(self, tLength, tSteps, hamiltonian, bath, depth,
-                           filename)
+                           filename, **kwargs)
         self._rho = None
 
     def _get_rho_partial(self, realizations, psi0, label, id, omp_threads,
@@ -356,6 +357,7 @@ class TransferHierarchy(Hierarchy):
             ds = ofile.create_dataset(lab, data=self._rho)
             self._set_attrs(ds)
             ds.attrs.create('type', 'transfer_fixed')
+            ofile.close()
 
     def from_file(self, filename, label):
         """@todo: Docstring for from_file.
