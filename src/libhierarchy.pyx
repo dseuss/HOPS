@@ -50,7 +50,7 @@ cdef class _HierarchyIntegrator(object):
         self._initialized = False
 
     def update(self, double tLength, int tSteps, int depth, g, gamma, Omega,
-               h, Lmap, bint with_terminator, int populated_modes=0):
+               h, Lmap, bint with_terminator=1, int populated_modes=0):
         """ Initializes the underlying Fortran integrator.
         This overwrites prior set parameters -- integrator is not reentrant.
         The bath correlation function is parametrized according to
