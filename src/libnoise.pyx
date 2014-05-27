@@ -6,6 +6,7 @@ cdef extern:
    void c_test(double *dt, int *tSteps, int *modes, double complex *g,
                double *gamma, double *Omega, int *realizations,
                double complex *EZ, double complex *EZZ, double complex *EZccZ)
+   void c_init_random_seed()
 
 
 def test(double dt, int tSteps, double complex[:] g, double[:] gamma,
@@ -47,3 +48,9 @@ def test(double dt, int tSteps, double complex[:] g, double[:] gamma,
                    axis=1)
 
     return EZ, EZZ, EZccZ, alpha
+
+
+def init_random_seed():
+    """ Initializes the random seed with a random seed. """
+    # TODO Make random seed an (optional) argument
+    c_init_random_seed()
